@@ -24,7 +24,8 @@ export interface Appointment {
   date: string;
   time: string;
   price: number;
-  status: 'agendado' | 'concluido' | 'cancelado';
+  // ATUALIZAÇÃO 1: Adicionado o status 'reagendado' para não dar erro
+  status: 'agendado' | 'concluido' | 'cancelado' | 'reagendado';
   notes?: string;
 }
 
@@ -74,6 +75,7 @@ export const useAppData = create<AppState>()(
       services: initialServices,
       appointments: [],
       finances: [],
+      
       addClient: (client) =>
         set((state) => ({ clients: [...state.clients, client] })),
       updateClient: (id, updatedClient) =>
@@ -86,6 +88,7 @@ export const useAppData = create<AppState>()(
         set((state) => ({
           clients: state.clients.filter((c) => c.id !== id),
         })),
+        
       addService: (service) =>
         set((state) => ({ services: [...state.services, service] })),
       updateService: (id, updatedService) =>
@@ -98,18 +101,76 @@ export const useAppData = create<AppState>()(
         set((state) => ({
           services: state.services.filter((s) => s.id !== id),
         })),
+        
+      // ATUALIZAÇÃO 2: Verificando se já entra como concluído
       addAppointment: (appointment) =>
-        set((state) => ({ appointments: [...state.appointments, appointment] })),
+        set((state) => {
+          let newFinances = [...state.finances];
+          
+          if (appointment.status === 'concluido') {
+            const client = state.clients.find((c) => c.id === appointment.clientId);
+            newFinances.push({
+              id: Date.now().toString(),
+              type: 'receita',
+              description: `${appointment.service} - ${client?.name || 'Cliente'}`,
+              value: Number(appointment.price) || 0,
+              date: appointment.date,
+              category: 'Serviços',
+            });
+          }
+
+          return { 
+            appointments: [...state.appointments, appointment],
+            finances: newFinances
+          };
+        }),
+        
+      // ATUALIZAÇÃO 3: A grande MÁGICA - Disparar receita ao marcar como "concluido"
       updateAppointment: (id, updatedAppointment) =>
-        set((state) => ({
-          appointments: state.appointments.map((a) =>
-            a.id === id ? { ...a, ...updatedAppointment } : a
-          ),
-        })),
+        set((state) => {
+          const currentApp = state.appointments.find(a => a.id === id);
+          let newFinances = [...state.finances];
+
+          // Se o status mudou para "concluido" E antes não era "concluido"
+          if (
+            updatedAppointment.status === 'concluido' && 
+            currentApp && 
+            currentApp.status !== 'concluido'
+          ) {
+            // Pega o nome do cliente usando o ID
+            const clientId = updatedAppointment.clientId || currentApp.clientId;
+            const client = state.clients.find(c => c.id === clientId);
+            
+            // Pega o nome do serviço, o preço e a data
+            const serviceName = updatedAppointment.service || currentApp.service;
+            const price = updatedAppointment.price !== undefined ? updatedAppointment.price : currentApp.price;
+            const date = updatedAppointment.date || currentApp.date;
+
+            // Injeta o dinheiro automaticamente na tela de finanças
+            newFinances.push({
+              id: Date.now().toString() + 'fin', // Cria um ID único
+              type: 'receita',
+              description: `${serviceName} - ${client?.name || 'Cliente'}`,
+              value: Number(price) || 0,
+              date: date,
+              category: 'Serviços'
+            });
+          }
+
+          // Atualiza a agenda e devolve os dois atualizados
+          return {
+            appointments: state.appointments.map((a) =>
+              a.id === id ? { ...a, ...updatedAppointment } : a
+            ),
+            finances: newFinances
+          };
+        }),
+        
       deleteAppointment: (id) =>
         set((state) => ({
           appointments: state.appointments.filter((a) => a.id !== id),
         })),
+        
       addFinance: (finance) =>
         set((state) => ({ finances: [...state.finances, finance] })),
       updateFinance: (id, updatedFinance) =>

@@ -14,20 +14,17 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Tabs,
-  Tab,
 } from '@mui/material';
-import { DollarSign, Plus, Trash2, Edit, TrendingUp, TrendingDown } from 'lucide-react';
+import { DollarSign, Plus, Trash2, Edit, TrendingUp, TrendingDown, User, Home } from 'lucide-react';
 import { useAppData, Finance } from '../hooks/useAppData';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export function Finances() {
   const { finances, addFinance, updateFinance, deleteFinance } = useAppData();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [tab, setTab] = useState(0);
   const [formData, setFormData] = useState({
     type: 'receita' as 'receita' | 'despesa',
     description: '',
@@ -78,6 +75,7 @@ export function Finances() {
     handleClose();
   };
 
+  // CÁLCULOS DO MÊS ATUAL
   const thisMonth = new Date();
   const monthStart = startOfMonth(thisMonth);
   const monthEnd = endOfMonth(thisMonth);
@@ -96,6 +94,10 @@ export function Finances() {
     .reduce((sum, f) => sum + f.value, 0);
 
   const balance = totalRevenue - totalExpenses;
+
+  // CÁLCULO DAS COMISSÕES (70% Mari / 30% Salão)
+  const mariCommission = totalRevenue * 0.70;
+  const salonCommission = totalRevenue * 0.30;
 
   const sortedFinances = [...finances].sort((a, b) => {
     return new Date(b.date).getTime() - new Date(a.date).getTime();
@@ -151,7 +153,7 @@ export function Finances() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-semibold mb-1">Controle Financeiro</h2>
-          <p className="text-gray-600">Gerencie receitas e despesas</p>
+          <p className="text-gray-600">Gerencie receitas, despesas e comissões</p>
         </div>
         <Button
           variant="contained"
@@ -162,12 +164,13 @@ export function Finances() {
         </Button>
       </div>
 
+      {/* BLOCO 1: RESUMO GERAL */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card sx={{ bgcolor: 'white' }}>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-2">Receitas do Mês</p>
+                <p className="text-sm text-gray-600 mb-2">Faturamento do Mês</p>
                 <p className="font-semibold text-green-600">
                   R$ {totalRevenue.toFixed(2)}
                 </p>
@@ -199,7 +202,7 @@ export function Finances() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-2">Saldo do Mês</p>
+                <p className="text-sm text-gray-600 mb-2">Saldo Líquido</p>
                 <p className={`font-semibold ${balance >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
                   R$ {balance.toFixed(2)}
                 </p>
@@ -210,6 +213,44 @@ export function Finances() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* BLOCO 2: COMISSÕES */}
+      <div>
+        <h3 className="font-semibold text-gray-700 mb-3">Divisão de Receitas (Mês Atual)</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card sx={{ bgcolor: 'white', borderLeft: '4px solid #9c27b0' }}>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Parte da Mari (70%)</p>
+                  <p className="font-semibold text-purple-700">
+                    R$ {mariCommission.toFixed(2)}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-purple-50">
+                  <User size={24} className="text-purple-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card sx={{ bgcolor: 'white', borderLeft: '4px solid #ff9800' }}>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Caixa do Salão (30%)</p>
+                  <p className="font-semibold text-orange-600">
+                    R$ {salonCommission.toFixed(2)}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-orange-50">
+                  <Home size={24} className="text-orange-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Card>
@@ -224,7 +265,7 @@ export function Finances() {
               <YAxis />
               <Tooltip formatter={(value) => `R$ ${Number(value).toFixed(2)}`} />
               <Legend />
-              <Line type="monotone" dataKey="receitas" stroke="#4caf50" name="Receitas" />
+              <Line type="monotone" dataKey="receitas" stroke="#4caf50" name="Faturamento Total" />
               <Line type="monotone" dataKey="despesas" stroke="#f44336" name="Despesas" />
               <Line type="monotone" dataKey="saldo" stroke="#2196f3" name="Saldo" />
             </LineChart>
