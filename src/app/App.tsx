@@ -48,7 +48,7 @@ export default function App() {
       >
         <Toolbar>
           <Scissors className="mr-3" size={28} />
-          <h1 className="font-semibold">Salão de Beleza</h1>
+          <h1 className="font-semibold">Espaço Mari Moraes</h1>
         </Toolbar>
       </AppBar>
 
