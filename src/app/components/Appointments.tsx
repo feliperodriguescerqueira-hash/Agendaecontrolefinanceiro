@@ -73,9 +73,13 @@ export function Appointments() {
     if (editingId) {
       updateAppointment(editingId, formData);
     } else {
+      const adjustedData = {
+        ...formData,
+        date: new Date(formData.date + 'T00:00:00')
+      };
       addAppointment({
         id: Date.now().toString(),
-        ...formData,
+        ...adjustedData,
       });
     }
     handleClose();
