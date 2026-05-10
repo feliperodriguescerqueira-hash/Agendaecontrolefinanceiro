@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { createClient } from '@supabase/supabase-js';
 
-// URL Corrigida (com o 'x' no lugar do 'z') 🎉
 const SUPABASE_URL = 'https://usqitmgfqtvdxszeusyf.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_u9RgR3SAeVLdQTjb7FerLQ_492VkzC1';
 
@@ -22,7 +21,11 @@ interface AppState {
   addClient: (client: Client) => Promise<void>;
   updateClient: (id: string, client: Partial<Client>) => Promise<void>;
   deleteClient: (id: string) => Promise<void>;
+  addMultipleClients: (clients: Client[]) => Promise<void>;
+  deleteMultipleClients: (ids: string[]) => Promise<void>;
   addService: (service: Service) => Promise<void>;
+  updateService: (id: string, service: Partial<Service>) => Promise<void>;
+  deleteService: (id: string) => Promise<void>;
   addAppointment: (appointment: Appointment) => Promise<void>;
   updateAppointment: (id: string, appointment: Partial<Appointment>) => Promise<void>;
   deleteAppointment: (id: string) => Promise<void>;
@@ -30,31 +33,24 @@ interface AppState {
   deleteFinance: (id: string) => Promise<void>;
 }
 
-const initialServices: Service[] = [
-  { id: '1', name: 'Corte Feminino', duration: 60, price: 80, category: 'Cabelo' },
-  { id: '2', name: 'Corte Masculino', duration: 30, price: 40, category: 'Cabelo' },
-  { id: '3', name: 'Coloração', duration: 120, price: 200, category: 'Cabelo' },
-  { id: '4', name: 'Manicure', duration: 45, price: 35, category: 'Unhas' },
-  { id: '5', name: 'Pedicure', duration: 60, price: 45, category: 'Unhas' },
-  { id: '6', name: 'Design de Sobrancelhas', duration: 30, price: 30, category: 'Estética' },
-  { id: '7', name: 'Limpeza de Pele', duration: 90, price: 150, category: 'Estética' },
-  { id: '8', name: 'Massagem Relaxante', duration: 60, price: 120, category: 'Estética' },
-];
-
 export const useAppData = create<AppState>((set, get) => ({
   clients: [],
-  services: initialServices,
+  services: [],
   appointments: [],
   finances: [],
   isLoading: false,
 
   fetchData: async () => {
     set({ isLoading: true });
+    // Busca TUDO do banco de dados
     const { data: clients } = await supabase.from('clients').select('*');
+    const { data: services } = await supabase.from('services').select('*');
     const { data: apps } = await supabase.from('appointments').select('*');
     const { data: fins } = await supabase.from('finances').select('*');
+    
     set({
       clients: clients || [],
+      services: services || [],
       appointments: apps || [],
       finances: fins || [],
       isLoading: false
@@ -62,16 +58,12 @@ export const useAppData = create<AppState>((set, get) => ({
   },
 
   addClient: async (client) => {
-    const { error } = await supabase.from('clients').insert([client]);
-    
-    if (error) {
-      // Deixamos apenas o alerta de ERRO ativo, para você saber se der algo errado
-      alert("⚠️ ERRO AO SALVAR: " + error.message);
-    } else {
-      // 👇 ALERTA DE SUCESSO SILENCIADO 👇
-      // alert("✅ SUCESSO! Cliente salvo na Nuvem com sucesso!");
-    }
-    
+    await supabase.from('clients').insert([client]);
+    await get().fetchData();
+  },
+
+  addMultipleClients: async (clientsArray) => {
+    await supabase.from('clients').insert(clientsArray);
     await get().fetchData();
   },
 
@@ -85,43 +77,35 @@ export const useAppData = create<AppState>((set, get) => ({
     await get().fetchData();
   },
 
+  deleteMultipleClients: async (ids) => {
+    await supabase.from('clients').delete().in('id', ids);
+    await get().fetchData();
+  },
+
+  // --- SERVIÇOS (Agora salvando na Nuvem) ---
   addService: async (service) => {
-    set((state) => ({ services: [...state.services, service] }));
+    const { error } = await supabase.from('services').insert([service]);
+    if (error) alert("Erro ao salvar serviço: " + error.message);
+    await get().fetchData();
+  },
+
+  updateService: async (id, updated) => {
+    const { error } = await supabase.from('services').update(updated).eq('id', id);
+    if (error) alert("Erro ao atualizar serviço: " + error.message);
+    await get().fetchData();
+  },
+
+  deleteService: async (id) => {
+    await supabase.from('services').delete().eq('id', id);
+    await get().fetchData();
   },
 
   addAppointment: async (app) => {
-    const { error } = await supabase.from('appointments').insert([app]);
-    if (error) alert("Erro agendamento: " + error.message);
-
-    if (app.status === 'concluido') {
-      const client = get().clients.find(c => c.id === app.clientId);
-      const finance = {
-        id: Date.now().toString() + 'f',
-        type: 'receita' as const,
-        description: `${app.service} - ${client?.name || 'Cliente'}`,
-        value: Number(app.price),
-        date: app.date,
-        category: 'Serviços'
-      };
-      await supabase.from('finances').insert([finance]);
-    }
+    await supabase.from('appointments').insert([app]);
     await get().fetchData();
   },
 
   updateAppointment: async (id, updated) => {
-    const current = get().appointments.find(a => a.id === id);
-    if (updated.status === 'concluido' && current?.status !== 'concluido') {
-      const client = get().clients.find(c => c.id === (updated.clientId || current?.clientId));
-      const finance = {
-        id: Date.now().toString() + 'f',
-        type: 'receita' as const,
-        description: `${updated.service || current?.service} - ${client?.name || 'Cliente'}`,
-        value: Number(updated.price ?? current?.price),
-        date: updated.date || current?.date,
-        category: 'Serviços'
-      };
-      await supabase.from('finances').insert([finance]);
-    }
     await supabase.from('appointments').update(updated).eq('id', id);
     await get().fetchData();
   },
