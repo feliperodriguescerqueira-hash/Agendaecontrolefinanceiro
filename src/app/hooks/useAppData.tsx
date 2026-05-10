@@ -1,11 +1,13 @@
 import { create } from 'zustand';
 import { createClient } from '@supabase/supabase-js';
 
+// Configurações de Conexão
 const SUPABASE_URL = 'https://usqitmgfqtvdxszeusyf.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_u9RgR3SAeVLdQTjb7FerLQ_492VkzC1';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Interfaces de Dados
 export interface Client { id: string; name: string; phone: string; email: string; notes?: string; }
 export interface Service { id: string; name: string; duration: number; price: number; category: string; }
 export interface Appointment { id: string; clientId: string; service: string; date: string; time: string; price: number; status: 'agendado' | 'concluido' | 'cancelado' | 'reagendado'; notes?: string; }
@@ -42,21 +44,39 @@ export const useAppData = create<AppState>((set, get) => ({
 
   fetchData: async () => {
     set({ isLoading: true });
-    // Busca TUDO do banco de dados
-    const { data: clients } = await supabase.from('clients').select('*');
-    const { data: services } = await supabase.from('services').select('*');
-    const { data: apps } = await supabase.from('appointments').select('*');
-    const { data: fins } = await supabase.from('finances').select('*');
-    
-    set({
-      clients: clients || [],
-      services: services || [],
-      appointments: apps || [],
-      finances: fins || [],
-      isLoading: false
-    });
+    console.log("🔄 Iniciando busca de dados no Supabase...");
+
+    try {
+      // Busca todas as tabelas em paralelo para maior performance
+      const [clientsRes, servicesRes, appsRes, finsRes] = await Promise.all([
+        supabase.from('clients').select('*').order('name', { ascending: true }),
+        supabase.from('services').select('*').order('name', { ascending: true }),
+        supabase.from('appointments').select('*').order('date', { ascending: false }),
+        supabase.from('finances').select('*').order('date', { ascending: false })
+      ]);
+
+      // Verificação de erros específica para cada tabela no console
+      if (clientsRes.error) console.error("❌ Erro na tabela Clients:", clientsRes.error.message);
+      if (servicesRes.error) console.error("❌ Erro na tabela Services:", servicesRes.error.message);
+      if (appsRes.error) console.error("❌ Erro na tabela Appointments:", appsRes.error.message);
+      if (finsRes.error) console.error("❌ Erro na tabela Finances:", finsRes.error.message);
+
+      set({
+        clients: clientsRes.data || [],
+        services: servicesRes.data || [],
+        appointments: appsRes.data || [],
+        finances: finsRes.data || [],
+        isLoading: false
+      });
+      
+      console.log("✅ Sincronização concluída com sucesso!");
+    } catch (err) {
+      console.error("💥 Erro crítico na conexão:", err);
+      set({ isLoading: false });
+    }
   },
 
+  // --- FUNÇÕES DE CLIENTES ---
   addClient: async (client) => {
     await supabase.from('clients').insert([client]);
     await get().fetchData();
@@ -82,7 +102,7 @@ export const useAppData = create<AppState>((set, get) => ({
     await get().fetchData();
   },
 
-  // --- SERVIÇOS (Agora salvando na Nuvem) ---
+  // --- FUNÇÕES DE SERVIÇOS ---
   addService: async (service) => {
     const { error } = await supabase.from('services').insert([service]);
     if (error) alert("Erro ao salvar serviço: " + error.message);
@@ -96,10 +116,12 @@ export const useAppData = create<AppState>((set, get) => ({
   },
 
   deleteService: async (id) => {
-    await supabase.from('services').delete().eq('id', id);
+    const { error } = await supabase.from('services').delete().eq('id', id);
+    if (error) alert("Erro ao deletar serviço: " + error.message);
     await get().fetchData();
   },
 
+  // --- FUNÇÕES DE AGENDAMENTOS ---
   addAppointment: async (app) => {
     await supabase.from('appointments').insert([app]);
     await get().fetchData();
@@ -115,6 +137,7 @@ export const useAppData = create<AppState>((set, get) => ({
     await get().fetchData();
   },
 
+  // --- FUNÇÕES DE FINANCEIRO ---
   addFinance: async (finance) => {
     await supabase.from('finances').insert([finance]);
     await get().fetchData();
