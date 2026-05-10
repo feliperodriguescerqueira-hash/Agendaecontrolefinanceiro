@@ -47,6 +47,7 @@ export function Appointments() {
   const [formData, setFormData] = useState({
     clientId: '',
     service: '',
+    price: 0,
     date: format(new Date(), 'yyyy-MM-dd'),
     time: '09:00',
     notes: '',
@@ -86,6 +87,7 @@ export function Appointments() {
     setFormData({
       clientId: '',
       service: '',
+      price: 0,
       date: format(day, 'yyyy-MM-dd'),
       time: '09:00',
       notes: '',
@@ -99,6 +101,7 @@ export function Appointments() {
     setFormData({
       clientId: app.clientId,
       service: app.service,
+      price: app.price || 0,
       date: app.date,
       time: app.time || '09:00',
       notes: app.notes || '',
@@ -116,37 +119,35 @@ export function Appointments() {
     if (!formData.clientId || !formData.service) return;
     
     if (editingId) {
-      updateAppointment(editingId, formData);
+      updateAppointment(editingId, {
+        ...formData,
+        price: Number(formData.price)
+      });
     } else {
       addAppointment({
         id: Date.now().toString(),
         ...formData,
-        price: services.find(s => s.name === formData.service)?.price || 0
+        price: Number(formData.price),
       });
     }
     handleClose();
   };
 
-  // FUNÇÃO MÁGICA DE REAGENDAMENTO
   const handlePrepareReschedule = () => {
     if (!editingId) return;
 
-    // 1. Atualiza o agendamento ANTIGO para o status "reagendado" no banco de dados
     updateAppointment(editingId, { ...formData, status: 'reagendado' });
 
-    // 2. Prepara o texto da observação automática
     const oldDateStr = formData.date ? format(parseISO(formData.date), 'dd/MM/yyyy') : 'data anterior';
     const autoNote = `[Origem: Reagendado do dia ${oldDateStr} às ${formData.time}]`;
 
-    // 3. Transforma a janela atual num "Novo Agendamento" preenchido
-    setEditingId(null); // Tira do modo edição (para criar um novo ao salvar)
+    setEditingId(null);
     setFormData({
       ...formData,
-      status: 'agendado', // O novo volta a ser "agendado"
+      status: 'agendado',
       notes: formData.notes ? `${formData.notes}\n${autoNote}` : autoNote
     });
 
-    // Dá um feedback visual para a Mari
     alert("O horário anterior foi marcado como 'Reagendado'. Agora, escolha a nova data e horário para a cliente e clique em 'Agendar'!");
   };
 
@@ -159,9 +160,15 @@ export function Appointments() {
     }
   };
 
+  // Função auxiliar para formatar preço
+  const formatPrice = (val: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  };
+
   return (
     <Box sx={{ p: { xs: 1, md: 3 }, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
       
+      {/* CARD DA ESQUERDA: CALENDÁRIO MENSAL */}
       <Card sx={{ flex: 2 }}>
         <CardHeader 
           title="Agenda Mensal" 
@@ -190,7 +197,6 @@ export function Appointments() {
               const isSelected = isSameDay(day, selectedDate);
               const isCurrentMonth = isSameMonth(day, currentDate);
               
-              // Mostra pontinhos para os agendamentos (ignora os cancelados no pontinho)
               const validApps = dayApps.filter(a => a.status !== 'cancelado');
 
               return (
@@ -223,6 +229,7 @@ export function Appointments() {
         </CardContent>
       </Card>
 
+      {/* CARD DA DIREITA: LISTA DE COMPROMISSOS DO DIA SELECIONADO */}
       <Card sx={{ flex: 1.5, display: 'flex', flexDirection: 'column' }}>
         <CardHeader 
           title={format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
@@ -261,7 +268,14 @@ export function Appointments() {
                       <Chip label={app.status} size="small" color={getStatusColor(app.status)} variant="outlined" sx={{ textTransform: 'capitalize' }} />
                     </Box>
                     <Typography variant="body1" sx={{ fontWeight: 'bold' }}>{client?.name || 'Cliente não encontrado'}</Typography>
-                    <Typography variant="body2" color="text.secondary">{app.service}</Typography>
+                    
+                    {/* AQUI ESTÁ A MUDANÇA: MOSTRANDO O SERVIÇO E O VALOR LADO A LADO */}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
+                      <Typography variant="body2" color="text.secondary">{app.service}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                        {formatPrice(app.price || 0)}
+                      </Typography>
+                    </Box>
                   </Box>
                 );
               })}
@@ -270,6 +284,7 @@ export function Appointments() {
         </CardContent>
       </Card>
 
+      {/* DIÁLOGO (POPUP) DE NOVO/EDITAR AGENDAMENTO */}
       <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs">
         <DialogTitle sx={{ fontWeight: 'bold' }}>
           {editingId ? 'Detalhes do Atendimento' : 'Novo Agendamento'}
@@ -304,11 +319,28 @@ export function Appointments() {
             <Select
               value={formData.service}
               label="Serviço"
-              onChange={(e) => setFormData({...formData, service: e.target.value})}
+              onChange={(e) => {
+                const selectedService = e.target.value;
+                const serviceObj = services.find(s => s.name === selectedService);
+                setFormData({ 
+                  ...formData, 
+                  service: selectedService,
+                  price: serviceObj ? serviceObj.price : 0
+                });
+              }}
             >
               {services.map(s => <MenuItem key={s.id} value={s.name}>{s.name}</MenuItem>)}
             </Select>
           </FormControl>
+
+          {/* CAMPO DE PREÇO EDITÁVEL NO FORMULÁRIO */}
+          <TextField 
+            type="number" 
+            label="Valor do Serviço (R$)" 
+            fullWidth 
+            value={formData.price}
+            onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+          />
 
           <Box sx={{ display: 'flex', gap: 2 }}>
             <TextField type="date" label="Data" fullWidth InputLabelProps={{ shrink: true }} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
@@ -332,7 +364,6 @@ export function Appointments() {
           <TextField label="Observações" fullWidth multiline rows={3} value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})} />
         </DialogContent>
         <DialogActions sx={{ p: 2, flexWrap: 'wrap', gap: 1, justifyContent: 'space-between' }}>
-          {/* BOTÕES DO LADO ESQUERDO: EXCLUIR E REAGENDAR */}
           {editingId ? (
             <Box sx={{ display: 'flex', gap: 1 }}>
               <IconButton color="error" onClick={() => { if(confirm('Excluir permanentemente?')) { deleteAppointment(editingId); handleClose(); } }} title="Excluir">
@@ -344,7 +375,6 @@ export function Appointments() {
             </Box>
           ) : <Box />}
           
-          {/* BOTÕES DO LADO DIREITO: SAIR E SALVAR */}
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button onClick={handleClose} color="inherit">Sair</Button>
             <Button onClick={handleSubmit} variant="contained">{editingId ? 'Atualizar' : 'Agendar'}</Button>

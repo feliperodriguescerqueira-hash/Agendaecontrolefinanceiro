@@ -1,60 +1,33 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createClient } from '@supabase/supabase-js';
 
-export interface Client {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  notes?: string;
-}
+// URL Corrigida (com o 'x' no lugar do 'z') 🎉
+const SUPABASE_URL = 'https://usqitmgfqtvdxszeusyf.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_u9RgR3SAeVLdQTjb7FerLQ_492VkzC1';
 
-export interface Service {
-  id: string;
-  name: string;
-  duration: number;
-  price: number;
-  category: string;
-}
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-export interface Appointment {
-  id: string;
-  clientId: string;
-  service: string;
-  date: string;
-  time: string;
-  price: number;
-  // ATUALIZAÇÃO 1: Adicionado o status 'reagendado' para não dar erro
-  status: 'agendado' | 'concluido' | 'cancelado' | 'reagendado';
-  notes?: string;
-}
-
-export interface Finance {
-  id: string;
-  type: 'receita' | 'despesa';
-  description: string;
-  value: number;
-  date: string;
-  category: string;
-}
+export interface Client { id: string; name: string; phone: string; email: string; notes?: string; }
+export interface Service { id: string; name: string; duration: number; price: number; category: string; }
+export interface Appointment { id: string; clientId: string; service: string; date: string; time: string; price: number; status: 'agendado' | 'concluido' | 'cancelado' | 'reagendado'; notes?: string; }
+export interface Finance { id: string; type: 'receita' | 'despesa'; description: string; value: number; date: string; category: string; }
 
 interface AppState {
   clients: Client[];
   services: Service[];
   appointments: Appointment[];
   finances: Finance[];
-  addClient: (client: Client) => void;
-  updateClient: (id: string, client: Partial<Client>) => void;
-  deleteClient: (id: string) => void;
-  addService: (service: Service) => void;
-  updateService: (id: string, service: Partial<Service>) => void;
-  deleteService: (id: string) => void;
-  addAppointment: (appointment: Appointment) => void;
-  updateAppointment: (id: string, appointment: Partial<Appointment>) => void;
-  deleteAppointment: (id: string) => void;
-  addFinance: (finance: Finance) => void;
-  updateFinance: (id: string, finance: Partial<Finance>) => void;
-  deleteFinance: (id: string) => void;
+  isLoading: boolean;
+  fetchData: () => Promise<void>;
+  addClient: (client: Client) => Promise<void>;
+  updateClient: (id: string, client: Partial<Client>) => Promise<void>;
+  deleteClient: (id: string) => Promise<void>;
+  addService: (service: Service) => Promise<void>;
+  addAppointment: (appointment: Appointment) => Promise<void>;
+  updateAppointment: (id: string, appointment: Partial<Appointment>) => Promise<void>;
+  deleteAppointment: (id: string) => Promise<void>;
+  addFinance: (finance: Finance) => Promise<void>;
+  deleteFinance: (id: string) => Promise<void>;
 }
 
 const initialServices: Service[] = [
@@ -68,124 +41,101 @@ const initialServices: Service[] = [
   { id: '8', name: 'Massagem Relaxante', duration: 60, price: 120, category: 'Estética' },
 ];
 
-export const useAppData = create<AppState>()(
-  persist(
-    (set) => ({
-      clients: [],
-      services: initialServices,
-      appointments: [],
-      finances: [],
-      
-      addClient: (client) =>
-        set((state) => ({ clients: [...state.clients, client] })),
-      updateClient: (id, updatedClient) =>
-        set((state) => ({
-          clients: state.clients.map((c) =>
-            c.id === id ? { ...c, ...updatedClient } : c
-          ),
-        })),
-      deleteClient: (id) =>
-        set((state) => ({
-          clients: state.clients.filter((c) => c.id !== id),
-        })),
-        
-      addService: (service) =>
-        set((state) => ({ services: [...state.services, service] })),
-      updateService: (id, updatedService) =>
-        set((state) => ({
-          services: state.services.map((s) =>
-            s.id === id ? { ...s, ...updatedService } : s
-          ),
-        })),
-      deleteService: (id) =>
-        set((state) => ({
-          services: state.services.filter((s) => s.id !== id),
-        })),
-        
-      // ATUALIZAÇÃO 2: Verificando se já entra como concluído
-      addAppointment: (appointment) =>
-        set((state) => {
-          let newFinances = [...state.finances];
-          
-          if (appointment.status === 'concluido') {
-            const client = state.clients.find((c) => c.id === appointment.clientId);
-            newFinances.push({
-              id: Date.now().toString(),
-              type: 'receita',
-              description: `${appointment.service} - ${client?.name || 'Cliente'}`,
-              value: Number(appointment.price) || 0,
-              date: appointment.date,
-              category: 'Serviços',
-            });
-          }
+export const useAppData = create<AppState>((set, get) => ({
+  clients: [],
+  services: initialServices,
+  appointments: [],
+  finances: [],
+  isLoading: false,
 
-          return { 
-            appointments: [...state.appointments, appointment],
-            finances: newFinances
-          };
-        }),
-        
-      // ATUALIZAÇÃO 3: A grande MÁGICA - Disparar receita ao marcar como "concluido"
-      updateAppointment: (id, updatedAppointment) =>
-        set((state) => {
-          const currentApp = state.appointments.find(a => a.id === id);
-          let newFinances = [...state.finances];
+  fetchData: async () => {
+    set({ isLoading: true });
+    const { data: clients } = await supabase.from('clients').select('*');
+    const { data: apps } = await supabase.from('appointments').select('*');
+    const { data: fins } = await supabase.from('finances').select('*');
+    set({
+      clients: clients || [],
+      appointments: apps || [],
+      finances: fins || [],
+      isLoading: false
+    });
+  },
 
-          // Se o status mudou para "concluido" E antes não era "concluido"
-          if (
-            updatedAppointment.status === 'concluido' && 
-            currentApp && 
-            currentApp.status !== 'concluido'
-          ) {
-            // Pega o nome do cliente usando o ID
-            const clientId = updatedAppointment.clientId || currentApp.clientId;
-            const client = state.clients.find(c => c.id === clientId);
-            
-            // Pega o nome do serviço, o preço e a data
-            const serviceName = updatedAppointment.service || currentApp.service;
-            const price = updatedAppointment.price !== undefined ? updatedAppointment.price : currentApp.price;
-            const date = updatedAppointment.date || currentApp.date;
-
-            // Injeta o dinheiro automaticamente na tela de finanças
-            newFinances.push({
-              id: Date.now().toString() + 'fin', // Cria um ID único
-              type: 'receita',
-              description: `${serviceName} - ${client?.name || 'Cliente'}`,
-              value: Number(price) || 0,
-              date: date,
-              category: 'Serviços'
-            });
-          }
-
-          // Atualiza a agenda e devolve os dois atualizados
-          return {
-            appointments: state.appointments.map((a) =>
-              a.id === id ? { ...a, ...updatedAppointment } : a
-            ),
-            finances: newFinances
-          };
-        }),
-        
-      deleteAppointment: (id) =>
-        set((state) => ({
-          appointments: state.appointments.filter((a) => a.id !== id),
-        })),
-        
-      addFinance: (finance) =>
-        set((state) => ({ finances: [...state.finances, finance] })),
-      updateFinance: (id, updatedFinance) =>
-        set((state) => ({
-          finances: state.finances.map((f) =>
-            f.id === id ? { ...f, ...updatedFinance } : f
-          ),
-        })),
-      deleteFinance: (id) =>
-        set((state) => ({
-          finances: state.finances.filter((f) => f.id !== id),
-        })),
-    }),
-    {
-      name: 'salon-storage',
+  addClient: async (client) => {
+    const { error } = await supabase.from('clients').insert([client]);
+    
+    if (error) {
+      alert("⚠️ ERRO AO SALVAR: " + error.message);
+    } else {
+      alert("✅ SUCESSO! Cliente salvo na Nuvem com sucesso!");
     }
-  )
-);
+    
+    await get().fetchData();
+  },
+
+  updateClient: async (id, updated) => {
+    await supabase.from('clients').update(updated).eq('id', id);
+    await get().fetchData();
+  },
+
+  deleteClient: async (id) => {
+    await supabase.from('clients').delete().eq('id', id);
+    await get().fetchData();
+  },
+
+  addService: async (service) => {
+    set((state) => ({ services: [...state.services, service] }));
+  },
+
+  addAppointment: async (app) => {
+    const { error } = await supabase.from('appointments').insert([app]);
+    if (error) alert("Erro agendamento: " + error.message);
+
+    if (app.status === 'concluido') {
+      const client = get().clients.find(c => c.id === app.clientId);
+      const finance = {
+        id: Date.now().toString() + 'f',
+        type: 'receita' as const,
+        description: `${app.service} - ${client?.name || 'Cliente'}`,
+        value: Number(app.price),
+        date: app.date,
+        category: 'Serviços'
+      };
+      await supabase.from('finances').insert([finance]);
+    }
+    await get().fetchData();
+  },
+
+  updateAppointment: async (id, updated) => {
+    const current = get().appointments.find(a => a.id === id);
+    if (updated.status === 'concluido' && current?.status !== 'concluido') {
+      const client = get().clients.find(c => c.id === (updated.clientId || current?.clientId));
+      const finance = {
+        id: Date.now().toString() + 'f',
+        type: 'receita' as const,
+        description: `${updated.service || current?.service} - ${client?.name || 'Cliente'}`,
+        value: Number(updated.price ?? current?.price),
+        date: updated.date || current?.date,
+        category: 'Serviços'
+      };
+      await supabase.from('finances').insert([finance]);
+    }
+    await supabase.from('appointments').update(updated).eq('id', id);
+    await get().fetchData();
+  },
+
+  deleteAppointment: async (id) => {
+    await supabase.from('appointments').delete().eq('id', id);
+    await get().fetchData();
+  },
+
+  addFinance: async (finance) => {
+    await supabase.from('finances').insert([finance]);
+    await get().fetchData();
+  },
+
+  deleteFinance: async (id) => {
+    await supabase.from('finances').delete().eq('id', id);
+    await get().fetchData();
+  },
+}));
