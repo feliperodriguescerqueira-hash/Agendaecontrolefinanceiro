@@ -17,7 +17,9 @@ import {
   Chip,
   Box,
   Divider,
-  IconButton
+  IconButton,
+  Autocomplete,
+  Avatar
 } from '@mui/material';
 import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, Clock, ClipboardList, Trash2, CalendarClock } from 'lucide-react';
 import { useAppData } from '../hooks/useAppData';
@@ -116,7 +118,10 @@ export function Appointments() {
   };
 
   const handleSubmit = () => {
-    if (!formData.clientId || !formData.service) return;
+    if (!formData.clientId || !formData.service) {
+      alert("Selecione uma cliente e um serviço!");
+      return;
+    }
     
     if (editingId) {
       updateAppointment(editingId, {
@@ -160,7 +165,6 @@ export function Appointments() {
     }
   };
 
-  // Função auxiliar para formatar preço
   const formatPrice = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
@@ -229,7 +233,7 @@ export function Appointments() {
         </CardContent>
       </Card>
 
-      {/* CARD DA DIREITA: LISTA DE COMPROMISSOS DO DIA SELECIONADO */}
+      {/* CARD DA DIREITA: LISTA DO DIA */}
       <Card sx={{ flex: 1.5, display: 'flex', flexDirection: 'column' }}>
         <CardHeader 
           title={format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
@@ -269,7 +273,6 @@ export function Appointments() {
                     </Box>
                     <Typography variant="body1" sx={{ fontWeight: 'bold' }}>{client?.name || 'Cliente não encontrado'}</Typography>
                     
-                    {/* AQUI ESTÁ A MUDANÇA: MOSTRANDO O SERVIÇO E O VALOR LADO A LADO */}
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
                       <Typography variant="body2" color="text.secondary">{app.service}</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
@@ -284,12 +287,12 @@ export function Appointments() {
         </CardContent>
       </Card>
 
-      {/* DIÁLOGO (POPUP) DE NOVO/EDITAR AGENDAMENTO */}
+      {/* DIÁLOGO DE AGENDAMENTO */}
       <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs">
         <DialogTitle sx={{ fontWeight: 'bold' }}>
           {editingId ? 'Detalhes do Atendimento' : 'Novo Agendamento'}
         </DialogTitle>
-        <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
           
           {editingId && (
             <Button 
@@ -297,22 +300,35 @@ export function Appointments() {
               startIcon={<ClipboardList />} 
               fullWidth
               onClick={() => alert('Ficha de Anamnese será integrada aqui!')}
-              sx={{ mb: 1 }}
             >
               Ficha de Anamnese
             </Button>
           )}
 
-          <FormControl fullWidth>
-            <InputLabel>Cliente</InputLabel>
-            <Select
-              value={formData.clientId}
-              label="Cliente"
-              onChange={(e) => setFormData({...formData, clientId: e.target.value})}
-            >
-              {clients.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
-            </Select>
-          </FormControl>
+          {/* 🔍 NOVO CAMPO DE BUSCA DE CLIENTE (AUTOCOMPLETE) */}
+          <Autocomplete
+            options={clients.sort((a, b) => a.name.localeCompare(b.name))}
+            getOptionLabel={(option) => option.name || ""}
+            value={clients.find(c => c.id === formData.clientId) || null}
+            onChange={(_, newValue) => {
+              setFormData({ ...formData, clientId: newValue ? newValue.id : '' });
+            }}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            renderInput={(params) => (
+              <TextField {...params} label="Cliente (digite para buscar)" fullWidth placeholder="Ex: Adriana..." />
+            )}
+            renderOption={(props, option) => (
+              <Box component="li" {...props} key={option.id} sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <Avatar sx={{ width: 24, height: 24, fontSize: 12, bgcolor: 'primary.main' }}>
+                  {option.name[0]}
+                </Avatar>
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{option.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">{option.phone || 'Sem telefone'}</Typography>
+                </Box>
+              </Box>
+            )}
+          />
           
           <FormControl fullWidth>
             <InputLabel>Serviço</InputLabel>
@@ -333,7 +349,6 @@ export function Appointments() {
             </Select>
           </FormControl>
 
-          {/* CAMPO DE PREÇO EDITÁVEL NO FORMULÁRIO */}
           <TextField 
             type="number" 
             label="Valor do Serviço (R$)" 
