@@ -65,9 +65,11 @@ export const useAppData = create<AppState>((set, get) => ({
     const { error } = await supabase.from('clients').insert([client]);
     
     if (error) {
+      // Deixamos apenas o alerta de ERRO ativo, para você saber se der algo errado
       alert("⚠️ ERRO AO SALVAR: " + error.message);
     } else {
-      alert("✅ SUCESSO! Cliente salvo na Nuvem com sucesso!");
+      // 👇 ALERTA DE SUCESSO SILENCIADO 👇
+      // alert("✅ SUCESSO! Cliente salvo na Nuvem com sucesso!");
     }
     
     await get().fetchData();
