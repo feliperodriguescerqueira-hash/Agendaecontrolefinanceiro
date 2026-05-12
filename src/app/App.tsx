@@ -12,7 +12,7 @@ import { Appointments } from './components/Appointments';
 import { Clients } from './components/Clients';
 import { Services } from './components/Services';
 import { Finances } from './components/Finances';
-import { AnamnesisList } from './components/AnamnesisList'; // 👇 Nova Tela Importada
+import { AnamnesisList } from './components/AnamnesisList';
 import { useAppData } from './hooks/useAppData';
 
 // 🎨 TEMA ROSA DA MARI
@@ -40,7 +40,7 @@ export default function App() {
       case 'clients': return <Clients />;
       case 'services': return <Services />;
       case 'finances': return <Finances />;
-      case 'anamnesis': return <AnamnesisList />; // 👇 Rota da Ficha Adicionada
+      case 'anamnesis': return <AnamnesisList />;
       default: return <Dashboard />;
     }
   };
@@ -50,7 +50,7 @@ export default function App() {
     { id: 'appointments', label: 'Agenda', icon: <CalendarIcon size={24} /> },
     { id: 'clients', label: 'Clientes', icon: <Users size={24} /> },
     { id: 'services', label: 'Serviços', icon: <Scissors size={24} /> },
-    { id: 'anamnesis', label: 'Fichas Clínicas', icon: <ClipboardList size={24} /> }, // 👇 Botão Adicionado no Menu
+    { id: 'anamnesis', label: 'Fichas Clínicas', icon: <ClipboardList size={24} /> },
     { id: 'finances', label: 'Financeiro', icon: <DollarSign size={24} /> },
   ];
 
@@ -101,9 +101,14 @@ export default function App() {
           
           <Box sx={{ flexGrow: 1 }} />
           <Divider />
-          <Box sx={{ p: isSidebarOpen ? 2 : 1, display: 'flex', justifyContent: 'center' }}>
-            <Typography variant="caption" color="text.secondary">{isSidebarOpen ? 'Gestão Profissional v1.0' : 'v1'}</Typography>
+          
+          {/* 👇 ASSINATURA ATUALIZADA 👇 */}
+          <Box sx={{ p: isSidebarOpen ? 2 : 1, display: 'flex', justifyContent: 'center', textAlign: 'center' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: '500' }}>
+              {isSidebarOpen ? 'Feito com ❤️ v1.1' : '❤️ v1.1'}
+            </Typography>
           </Box>
+          
         </Box>
 
         {/* ÁREA DE CONTEÚDO */}
