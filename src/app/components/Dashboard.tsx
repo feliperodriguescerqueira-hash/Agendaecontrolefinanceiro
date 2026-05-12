@@ -14,7 +14,6 @@ import { ptBR } from 'date-fns/locale';
 import { AnamnesisForm } from './AnamnesisForm';
 
 export function Dashboard() {
-  // 👇 Adicionamos o addFinance aqui para poder lançar a receita no caixa!
   const { appointments = [], clients = [], services = [], finances = [], anamnesis = [], updateAppointment, deleteAppointment, addFinance } = useAppData();
   const today = new Date();
 
@@ -63,8 +62,8 @@ export function Dashboard() {
 
   const { receitaHoje, despesaHoje } = useMemo(() => {
     return todayFinances.reduce((acc, curr) => {
-      if (curr.type === 'receita') acc.receitaHoje += curr.value;
-      if (curr.type === 'despesa') acc.despesaHoje += curr.value;
+      if (curr.type === 'receita') acc.receitaHoje += Number(curr.value || 0);
+      if (curr.type === 'despesa') acc.despesaHoje += Number(curr.value || 0);
       return acc;
     }, { receitaHoje: 0, despesaHoje: 0 });
   }, [todayFinances]);
@@ -82,25 +81,31 @@ export function Dashboard() {
     }
   };
 
-  // 👇 ATUALIZADO: Agora lança o valor no financeiro automaticamente
+  // 👇 SISTEMA DE CONCLUSÃO BLINDADO
   const handleComplete = async (e: any, app: any) => {
     e.stopPropagation(); 
-    if (confirm(`Deseja marcar o serviço "${app.service}" como concluído? O valor de ${formatPrice(app.price || 0)} será lançado no financeiro automaticamente.`)) {
-      
-      // 1. Muda o status para concluído
-      await updateAppointment(app.id, { ...app, status: 'concluido' });
-      
-      // 2. Lança a receita no banco de dados se o valor for maior que zero
-      if (app.price > 0) {
-        const client = clients.find(c => c.id === app.clientId);
-        await addFinance({
-          id: Date.now().toString(),
-          type: 'receita',
-          description: `Atendimento: ${app.service} (${client?.name || 'Cliente'})`,
-          value: app.price,
-          date: app.date,
-          category: 'Serviços'
-        });
+    const valorNumerico = Number(app.price || 0);
+
+    if (confirm(`Deseja marcar o serviço "${app.service}" como concluído? O valor de ${formatPrice(valorNumerico)} será lançado no financeiro automaticamente.`)) {
+      try {
+        // 1. Muda o status
+        await updateAppointment(app.id, { ...app, status: 'concluido', price: valorNumerico });
+        
+        // 2. Lança a receita se for maior que zero
+        if (valorNumerico > 0) {
+          const client = clients.find(c => c.id === app.clientId);
+          await addFinance({
+            id: Date.now().toString(),
+            type: 'receita',
+            description: `Atendimento: ${app.service} (${client?.name || 'Cliente'})`,
+            value: valorNumerico,
+            date: app.date,
+            category: 'Serviços'
+          });
+        }
+      } catch (error) {
+        console.error("Erro ao concluir agendamento:", error);
+        alert("Ocorreu um erro ao salvar no banco de dados. Tente novamente.");
       }
     }
   };
@@ -110,7 +115,7 @@ export function Dashboard() {
     setFormData({
       clientId: app.clientId,
       service: app.service,
-      price: app.price || 0,
+      price: Number(app.price || 0),
       date: app.date,
       time: app.time || '09:00',
       status: app.status || 'agendado',
@@ -119,26 +124,32 @@ export function Dashboard() {
     setEditModalOpen(true);
   };
 
-  // 👇 ATUALIZADO: Inteligência para lançar no financeiro se concluir pela janela de edição
+  // 👇 EDIÇÃO MANUAL BLINDADA
   const handleSaveEdit = async () => {
     if (editingId) {
-      const originalApp = appointments.find(a => a.id === editingId);
-      await updateAppointment(editingId, { ...formData, price: Number(formData.price) });
-      
-      // Se mudou o status para concluído AGORA, também lança no financeiro
-      if (formData.status === 'concluido' && originalApp?.status !== 'concluido' && Number(formData.price) > 0) {
-        const client = clients.find(c => c.id === formData.clientId);
-        await addFinance({
-          id: Date.now().toString(),
-          type: 'receita',
-          description: `Atendimento: ${formData.service} (${client?.name || 'Cliente'})`,
-          value: Number(formData.price),
-          date: formData.date,
-          category: 'Serviços'
-        });
+      try {
+        const originalApp = appointments.find(a => a.id === editingId);
+        const valorNumerico = Number(formData.price || 0);
+
+        await updateAppointment(editingId, { ...formData, price: valorNumerico });
+        
+        if (formData.status === 'concluido' && originalApp?.status !== 'concluido' && valorNumerico > 0) {
+          const client = clients.find(c => c.id === formData.clientId);
+          await addFinance({
+            id: Date.now().toString(),
+            type: 'receita',
+            description: `Atendimento: ${formData.service} (${client?.name || 'Cliente'})`,
+            value: valorNumerico,
+            date: formData.date,
+            category: 'Serviços'
+          });
+        }
+        setEditModalOpen(false);
+      } catch (error) {
+        console.error("Erro ao salvar edição:", error);
+        alert("Ocorreu um erro ao atualizar o agendamento.");
       }
     }
-    setEditModalOpen(false);
   };
 
   const goToFinances = () => {
@@ -275,7 +286,7 @@ export function Dashboard() {
                             <Chip label={app.status} size="small" color={getStatusColor(app.status) as any} variant="outlined" sx={{ textTransform: 'capitalize', height: 20, fontSize: '0.7rem' }} />
                           </Box>
                           <Typography variant="body2" color="text.secondary">
-                            {app.service} • <span style={{ fontWeight: 'bold' }}>{formatPrice(app.price || 0)}</span>
+                            {app.service} • <span style={{ fontWeight: 'bold' }}>{formatPrice(Number(app.price || 0))}</span>
                           </Typography>
                         </Box>
 
@@ -341,7 +352,7 @@ export function Dashboard() {
             onClick={() => { if (!formData.clientId) return; setAnamnesisOpen(true); }}
             sx={{ mb: 1, fontWeight: 'bold', borderWidth: 2 }}
           >
-            {existingAnamnesis ? 'VER Ficha de Anamnese (Preenchida)' : 'CRIAR Ficha de Anamnese'}
+            {existingAnamnesis ? 'VER Ficha de Anamnese' : 'CRIAR Ficha de Anamnese'}
           </Button>
 
           <Autocomplete
