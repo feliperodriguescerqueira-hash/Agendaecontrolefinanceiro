@@ -6,6 +6,8 @@ import {
 } from '@mui/material';
 import { useAppData, Anamnesis } from '../hooks/useAppData';
 import { Activity, HeartPulse, Sparkles, Coffee, Target, FileSignature, FileText, Send, Eraser } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 // --- COMPONENTE DE ASSINATURA (DESENHO) ---
 const SignaturePad = ({ title, value, onSave, onClear }: { title: string, value?: string, onSave: (v: string) => void, onClear: () => void }) => {
@@ -68,7 +70,7 @@ const SignaturePad = ({ title, value, onSave, onClear }: { title: string, value?
     <Box sx={{ border: '1px solid #ccc', borderRadius: 2, p: 2, bgcolor: '#fff', position: 'relative' }}>
       <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', justifyContent: 'space-between' }}>
         {title}
-        <IconButton size="small" onClick={clear} title="Limpar Assinatura"><Eraser size={16} /></IconButton>
+        <IconButton size="small" onClick={clear} title="Limpar Assinatura" className="no-print"><Eraser size={16} /></IconButton>
       </Typography>
       <canvas
         ref={canvasRef}
@@ -82,11 +84,21 @@ const SignaturePad = ({ title, value, onSave, onClear }: { title: string, value?
   );
 };
 
-
-interface TabPanelProps { children?: React.ReactNode; index: number; value: number; }
+// 👇 CORREÇÃO 1: Este TabPanel agora permite que TODAS as abas apareçam na hora de imprimir o PDF
+interface TabPanelProps { children?: React.ReactNode; index: number; value: number; title: string; }
 function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return <div role="tabpanel" hidden={value !== index} {...other}>{value === index && <Box sx={{ pt: 3 }}>{children}</Box>}</div>;
+  const { children, value, index, title, ...other } = props;
+  return (
+    <div role="tabpanel" className={`tab-panel ${value === index ? 'active' : ''}`} {...other}>
+      <Box sx={{ pt: 3 }}>
+        {/* Título que só aparece no PDF para organizar as páginas */}
+        <Typography variant="h6" className="print-only-title" sx={{ display: 'none', mb: 2, color: 'primary.main', borderBottom: '1px solid #ccc', pb: 1 }}>
+          {title}
+        </Typography>
+        {children}
+      </Box>
+    </div>
+  );
 }
 
 export function AnamnesisForm({ open, onClose, clientId, existingData }: any) {
@@ -149,8 +161,21 @@ export function AnamnesisForm({ open, onClose, clientId, existingData }: any) {
     window.print();
   };
 
+  // 👇 CORREÇÃO 2: Mensagem de WhatsApp super completa e formatada
   const handleWhatsApp = () => {
-    const text = `*Ficha de Avaliação Clínica - Estética*\n\n*Paciente:* ${clientName}\n*Data:* ${formData.data_atendimento}\n*Objetivos Principais:* ${formData.objetivos?.join(', ') || 'Não preenchido'}\n\n*Termo de consentimento assinado digitalmente.*\n\nAgradecemos a confiança! Em caso de dúvidas, estamos à disposição.`;
+    const dataFormatada = formData.data_atendimento ? format(parseISO(formData.data_atendimento), 'dd/MM/yyyy') : 'Não informada';
+    const objetivosStr = formData.objetivos?.length ? formData.objetivos.join(', ') : 'Não preenchidos';
+    const saudeStr = formData.condicoes_saude?.length ? formData.condicoes_saude.join(', ') : 'Nenhuma relatada';
+    
+    const text = `*Ficha Clínica - Studio Mari Moraes* 📋✨\n\n` +
+      `*Paciente:* ${clientName}\n` +
+      `*Data:* ${dataFormatada}\n\n` +
+      `*⚖️ Biometria:*\n- Peso Atual: ${formData.peso_atual || '- '}kg\n- IMC: ${formData.imc || '-'}\n\n` +
+      `*🎯 Objetivos Principais:*\n${objetivosStr}\n\n` +
+      `*🩺 Condições de Saúde (Atenção):*\n${saudeStr}\n\n` +
+      `*✅ Termo de Responsabilidade:*\nAssinado e Validado digitalmente.\n\n` +
+      `Agradecemos a confiança! Em caso de dúvidas, estamos à disposição.`;
+      
     const num = clientPhone.replace(/\D/g, '');
     if (num) {
       window.open(`https://wa.me/55${num}?text=${encodeURIComponent(text)}`, '_blank');
@@ -163,12 +188,25 @@ export function AnamnesisForm({ open, onClose, clientId, existingData }: any) {
     <>
       <style>
         {`
+          .tab-panel { display: none; }
+          .tab-panel.active { display: block; }
+
+          /* Regras Mágicas para o PDF sair perfeito */
           @media print {
             body * { visibility: hidden; }
             #print-area, #print-area * { visibility: visible; }
             #print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
             .no-print { display: none !important; }
-            .MuiDialog-paper { box-shadow: none; max-width: 100% !important; margin: 0; }
+            .MuiDialog-paper { box-shadow: none !important; max-width: 100% !important; width: 100% !important; margin: 0 !important; }
+            
+            /* Força todas as abas a aparecerem na impressão */
+            .tab-panel { display: block !important; page-break-inside: avoid; margin-bottom: 30px; }
+            
+            /* Mostra os títulos invisíveis só no papel */
+            .print-only-title { display: block !important; }
+            
+            /* Esconde a barra de botões das abas para não poluir o PDF */
+            .MuiTabs-root { display: none !important; }
           }
         `}
       </style>
@@ -192,8 +230,7 @@ export function AnamnesisForm({ open, onClose, clientId, existingData }: any) {
 
         <DialogContent sx={{ minHeight: '60vh', bgcolor: '#fafafa', pb: 6 }}>
           
-          <TabPanel value={tabIndex} index={0}>
-            {/* O conteúdo das abas 0 a 4 permanece igual ao anterior (resumido por espaço, cole seu conteúdo das abas aqui se quiser, ou use este já limpo) */}
+          <TabPanel value={tabIndex} index={0} title="1. Histórico de Emagrecimento">
              <Grid container spacing={3}>
               <Grid item xs={12} sm={3}>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 'bold' }}>Data do Atendimento:</Typography>
@@ -227,7 +264,7 @@ export function AnamnesisForm({ open, onClose, clientId, existingData }: any) {
             </Grid>
           </TabPanel>
 
-          <TabPanel value={tabIndex} index={1}>
+          <TabPanel value={tabIndex} index={1} title="2. Histórico de Saúde">
             <Grid container spacing={3}>
               <Grid item xs={12}><Typography variant="subtitle2" color="primary">Condições Preexistentes</Typography></Grid>
               <Grid item xs={12}>
@@ -252,7 +289,7 @@ export function AnamnesisForm({ open, onClose, clientId, existingData }: any) {
             </Grid>
           </TabPanel>
 
-          <TabPanel value={tabIndex} index={2}>
+          <TabPanel value={tabIndex} index={2} title="3. Avaliação da Pele e Tegumento">
             <Grid container spacing={3}>
               <Grid item xs={12} sm={6}>
                 <Typography variant="subtitle2" gutterBottom>Tipo de Pele (Rosto/Corpo)</Typography>
@@ -281,7 +318,7 @@ export function AnamnesisForm({ open, onClose, clientId, existingData }: any) {
             </Grid>
           </TabPanel>
 
-          <TabPanel value={tabIndex} index={3}>
+          <TabPanel value={tabIndex} index={3} title="4. Estilo de Vida">
             <Grid container spacing={3}>
               <Grid item xs={12} sm={6}>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 'bold' }}>Ingestão de Água (Litros/dia):</Typography>
@@ -302,7 +339,7 @@ export function AnamnesisForm({ open, onClose, clientId, existingData }: any) {
             </Grid>
           </TabPanel>
 
-          <TabPanel value={tabIndex} index={4}>
+          <TabPanel value={tabIndex} index={4} title="5. Objetivos com o Tratamento">
             <Grid container spacing={3}>
               <Grid item xs={12}>
                 <Typography variant="subtitle2" gutterBottom>Objetivo Principal do Tratamento Estético</Typography>
@@ -323,8 +360,7 @@ export function AnamnesisForm({ open, onClose, clientId, existingData }: any) {
             </Grid>
           </TabPanel>
 
-          {/* ABA 6: TERMO E ASSINATURAS */}
-          <TabPanel value={tabIndex} index={5}>
+          <TabPanel value={tabIndex} index={5} title="6. Termo de Ciência e Assinaturas">
             <Grid container spacing={3}>
               <Grid item xs={12}>
                 <Box sx={{ p: 3, bgcolor: '#fff3e0', borderRadius: 2, border: '1px solid #ffcc80' }}>
