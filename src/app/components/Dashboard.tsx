@@ -1,50 +1,36 @@
 import { useState, useMemo } from 'react';
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  Typography,
-  Box,
-  Grid,
-  Divider,
-  Button,
-  IconButton,
-  Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Tooltip
+  Card, CardContent, CardHeader, Typography, Box, Grid, Divider, Button, 
+  IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, 
+  TextField, FormControl, InputLabel, Select, MenuItem, Tooltip, Autocomplete, Avatar
 } from '@mui/material';
 import { 
-  Calendar, 
-  DollarSign, 
-  TrendingDown, 
-  CheckCircle, 
-  Clock, 
-  MessageCircle,
-  CalendarClock,
-  Wallet
+  Calendar, DollarSign, CheckCircle, Clock, MessageCircle, 
+  CalendarClock, Wallet, ClipboardList, Trash2
 } from 'lucide-react';
 import { useAppData } from '../hooks/useAppData';
 import { format, isSameDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { AnamnesisForm } from './AnamnesisForm';
 
 export function Dashboard() {
-  const { appointments = [], clients = [], finances = [], updateAppointment } = useAppData();
+  // 👇 Adicionamos o addFinance aqui para poder lançar a receita no caixa!
+  const { appointments = [], clients = [], services = [], finances = [], anamnesis = [], updateAppointment, deleteAppointment, addFinance } = useAppData();
   const today = new Date();
 
-  // Estados para Edição Rápida (Reagendamento)
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editingApp, setEditingApp] = useState<any>(null);
-  const [editForm, setEditForm] = useState({ date: '', time: '', status: '' });
+  const [anamnesisOpen, setAnamnesisOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  
+  const [formData, setFormData] = useState({
+    clientId: '', service: '', price: 0, date: '', time: '', status: '', notes: ''
+  });
 
-  // --- FUNÇÕES AUXILIARES ---
+  const existingAnamnesis = useMemo(() => {
+    if (!formData.clientId) return null;
+    return anamnesis.find(a => a.client_id === formData.clientId) || null;
+  }, [anamnesis, formData.clientId]);
+
   const parseDateSafe = (dateValue: any) => {
     try {
       if (!dateValue) return null;
@@ -57,8 +43,6 @@ export function Dashboard() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
-  // --- CÁLCULOS DO DASHBOARD (VISÃO DIÁRIA) ---
-  
   const todayAppointments = useMemo(() => {
     return appointments
       .filter(a => {
@@ -68,7 +52,6 @@ export function Dashboard() {
       .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   }, [appointments, today]);
 
-  // Quantos serviços já foram finalizados hoje?
   const concluidosHoje = todayAppointments.filter(a => a.status === 'concluido').length;
 
   const todayFinances = useMemo(() => {
@@ -88,9 +71,8 @@ export function Dashboard() {
 
   const saldoHoje = receitaHoje - despesaHoje;
 
-  // --- AÇÕES RÁPIDAS ---
-  
-  const handleWhatsApp = (clientId: string) => {
+  const handleWhatsApp = (e: any, clientId: string) => {
+    e.stopPropagation(); 
     const client = clients.find(c => c.id === clientId);
     if (client?.phone) {
       const cleanPhone = client.phone.replace(/\D/g, ''); 
@@ -100,32 +82,82 @@ export function Dashboard() {
     }
   };
 
-  const handleComplete = (app: any) => {
-    if (confirm(`Deseja marcar o serviço "${app.service}" como concluído? O valor será lançado no financeiro automaticamente.`)) {
-      updateAppointment(app.id, { ...app, status: 'concluido' });
+  // 👇 ATUALIZADO: Agora lança o valor no financeiro automaticamente
+  const handleComplete = async (e: any, app: any) => {
+    e.stopPropagation(); 
+    if (confirm(`Deseja marcar o serviço "${app.service}" como concluído? O valor de ${formatPrice(app.price || 0)} será lançado no financeiro automaticamente.`)) {
+      
+      // 1. Muda o status para concluído
+      await updateAppointment(app.id, { ...app, status: 'concluido' });
+      
+      // 2. Lança a receita no banco de dados se o valor for maior que zero
+      if (app.price > 0) {
+        const client = clients.find(c => c.id === app.clientId);
+        await addFinance({
+          id: Date.now().toString(),
+          type: 'receita',
+          description: `Atendimento: ${app.service} (${client?.name || 'Cliente'})`,
+          value: app.price,
+          date: app.date,
+          category: 'Serviços'
+        });
+      }
     }
   };
 
   const openEditModal = (app: any) => {
-    setEditingApp(app);
-    setEditForm({
+    setEditingId(app.id);
+    setFormData({
+      clientId: app.clientId,
+      service: app.service,
+      price: app.price || 0,
       date: app.date,
-      time: app.time,
-      status: app.status
+      time: app.time || '09:00',
+      status: app.status || 'agendado',
+      notes: app.notes || ''
     });
     setEditModalOpen(true);
   };
 
-  const handleSaveEdit = () => {
-    if (editingApp) {
-      updateAppointment(editingApp.id, {
-        ...editingApp,
-        date: editForm.date,
-        time: editForm.time,
-        status: editForm.status
-      });
+  // 👇 ATUALIZADO: Inteligência para lançar no financeiro se concluir pela janela de edição
+  const handleSaveEdit = async () => {
+    if (editingId) {
+      const originalApp = appointments.find(a => a.id === editingId);
+      await updateAppointment(editingId, { ...formData, price: Number(formData.price) });
+      
+      // Se mudou o status para concluído AGORA, também lança no financeiro
+      if (formData.status === 'concluido' && originalApp?.status !== 'concluido' && Number(formData.price) > 0) {
+        const client = clients.find(c => c.id === formData.clientId);
+        await addFinance({
+          id: Date.now().toString(),
+          type: 'receita',
+          description: `Atendimento: ${formData.service} (${client?.name || 'Cliente'})`,
+          value: Number(formData.price),
+          date: formData.date,
+          category: 'Serviços'
+        });
+      }
     }
     setEditModalOpen(false);
+  };
+
+  const goToFinances = () => {
+    const spans = Array.from(document.querySelectorAll('.MuiListItemText-primary'));
+    const financeSpan = spans.find(el => el.textContent === 'Financeiro');
+    if (financeSpan) {
+      const btn = financeSpan.closest('.MuiListItemButton-root') as HTMLElement;
+      if (btn) btn.click();
+    }
+  };
+
+  const handlePrepareReschedule = () => {
+    if (!editingId) return;
+    updateAppointment(editingId, { ...formData, status: 'reagendado' });
+    const oldDateStr = formData.date ? format(parseISO(formData.date), 'dd/MM/yyyy') : 'data anterior';
+    const autoNote = `[Origem: Reagendado do dia ${oldDateStr} às ${formData.time}]`;
+    setEditingId(null);
+    setFormData({ ...formData, status: 'agendado', notes: formData.notes ? `${formData.notes}\n${autoNote}` : autoNote });
+    alert("Marcado como 'Reagendado'. Agora escolha a nova data/hora e clique em 'Atualizar'!");
   };
 
   const getStatusColor = (status: string) => {
@@ -140,17 +172,13 @@ export function Dashboard() {
   return (
     <Box sx={{ p: { xs: 1, md: 3 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
       
-      {/* CABEÇALHO */}
       <Box>
-        <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-          Olá, Mari! 👋
-        </Typography>
+        <Typography variant="h5" sx={{ fontWeight: 'bold' }}>Olá, Mari! 👋</Typography>
         <Typography variant="body1" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
           {format(today, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
         </Typography>
       </Box>
 
-      {/* CARDS SUPERIORES DE RESUMO (Focados no Dia) */}
       <Grid container spacing={2}>
         <Grid item xs={12} sm={6} md={3}>
           <Card sx={{ borderLeft: '4px solid #9c27b0', height: '100%' }}>
@@ -201,17 +229,10 @@ export function Dashboard() {
         </Grid>
       </Grid>
 
-      {/* ÁREA PRINCIPAL: LISTA DE HOJE E RESUMO FINANCEIRO */}
       <Grid container spacing={3}>
-        
-        {/* ESQUERDA: Agendamentos de Hoje (Interativo) */}
         <Grid item xs={12} lg={8}>
           <Card sx={{ height: '100%', minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-            <CardHeader 
-              title="Agendamentos de Hoje" 
-              subheader="Sua rotina e próximos atendimentos"
-              sx={{ pb: 1 }}
-            />
+            <CardHeader title="Agendamentos de Hoje" subheader="Clique sobre o card para editar ou abrir a Ficha de Anamnese" sx={{ pb: 1 }} />
             <Divider />
             <CardContent sx={{ flexGrow: 1, overflowY: 'auto', p: 2 }}>
               {todayAppointments.length === 0 ? (
@@ -227,15 +248,18 @@ export function Dashboard() {
                     const isCancelado = app.status === 'cancelado';
 
                     return (
-                      <Card key={app.id} variant="outlined" sx={{ 
-                        display: 'flex', flexWrap: 'wrap', alignItems: 'center', p: 2, gap: 2,
-                        bgcolor: isConcluido ? '#f5f5f5' : isCancelado ? '#fff0f0' : 'white',
-                        opacity: (isConcluido || isCancelado) ? 0.7 : 1,
-                        borderLeft: '4px solid',
-                        borderLeftColor: `${getStatusColor(app.status)}.main`
-                      }}>
-                        
-                        {/* Bloco de Horário */}
+                      <Card 
+                        key={app.id} 
+                        variant="outlined" 
+                        onClick={() => openEditModal(app)}
+                        sx={{ 
+                          display: 'flex', flexWrap: 'wrap', alignItems: 'center', p: 2, gap: 2, cursor: 'pointer',
+                          bgcolor: isConcluido ? '#f5f5f5' : isCancelado ? '#fff0f0' : 'white',
+                          opacity: (isConcluido || isCancelado) ? 0.7 : 1,
+                          borderLeft: '4px solid', borderLeftColor: `${getStatusColor(app.status)}.main`,
+                          transition: 'all 0.2s', '&:hover': { bgcolor: '#f0f7ff', borderColor: 'primary.main', transform: 'scale(1.01)' }
+                        }}
+                      >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 80 }}>
                           <Clock size={20} className={isConcluido ? 'text-gray-400' : 'text-primary'} />
                           <Typography variant="h6" sx={{ fontWeight: 'bold', color: isConcluido ? 'text.secondary' : 'text.primary' }}>
@@ -243,53 +267,33 @@ export function Dashboard() {
                           </Typography>
                         </Box>
 
-                        {/* Bloco de Info do Cliente */}
                         <Box sx={{ flexGrow: 1, minWidth: 200 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                             <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                               {client?.name || 'Cliente Removido'}
                             </Typography>
-                            <Chip label={app.status} size="small" color={getStatusColor(app.status)} variant="outlined" sx={{ textTransform: 'capitalize', height: 20, fontSize: '0.7rem' }} />
+                            <Chip label={app.status} size="small" color={getStatusColor(app.status) as any} variant="outlined" sx={{ textTransform: 'capitalize', height: 20, fontSize: '0.7rem' }} />
                           </Box>
                           <Typography variant="body2" color="text.secondary">
                             {app.service} • <span style={{ fontWeight: 'bold' }}>{formatPrice(app.price || 0)}</span>
                           </Typography>
                         </Box>
 
-                        {/* Bloco de Ações Rápidas */}
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                          
-                          {/* Botão WhatsApp */}
                           {client?.phone && (
                             <Tooltip title="Chamar no WhatsApp">
-                              <IconButton size="small" sx={{ color: '#25D366', bgcolor: '#e8f5e9', '&:hover': { bgcolor: '#c8e6c9' } }} onClick={() => handleWhatsApp(client.id)}>
+                              <IconButton size="small" sx={{ color: '#25D366', bgcolor: '#e8f5e9', '&:hover': { bgcolor: '#c8e6c9' } }} onClick={(e) => handleWhatsApp(e, client.id)}>
                                 <MessageCircle size={20} />
                               </IconButton>
                             </Tooltip>
                           )}
-
-                          {/* Botão Reagendar/Editar Rápido */}
-                          <Tooltip title="Editar / Reagendar">
-                            <IconButton size="small" color="primary" sx={{ bgcolor: 'primary.light', color: 'white', '&:hover': { bgcolor: 'primary.main' } }} onClick={() => openEditModal(app)}>
-                              <CalendarClock size={20} /> 
-                            </IconButton>
-                          </Tooltip>
-
-                          {/* Botão Concluir Serviço */}
+                          
                           {(!isConcluido && !isCancelado) && (
-                            <Button 
-                              variant="contained" 
-                              color="success" 
-                              size="small" 
-                              startIcon={<CheckCircle size={16} />}
-                              onClick={() => handleComplete(app)}
-                              sx={{ ml: 1 }}
-                            >
+                            <Button variant="contained" color="success" size="small" startIcon={<CheckCircle size={16} />} onClick={(e) => handleComplete(e, app)} sx={{ ml: 1 }}>
                               Concluir
                             </Button>
                           )}
                         </Box>
-
                       </Card>
                     );
                   })}
@@ -299,58 +303,86 @@ export function Dashboard() {
           </Card>
         </Grid>
 
-        {/* DIREITA: Resumo Financeiro Simplificado (DIÁRIO) */}
         <Grid item xs={12} lg={4}>
           <Card sx={{ height: '100%' }}>
             <CardHeader title="Balanço do Dia" subheader="Movimentações de hoje" sx={{ pb: 1 }} />
             <Divider />
             <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 3, p: 3 }}>
-              
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="body1" color="text.secondary">Receitas (Hoje)</Typography>
-                <Typography variant="h6" sx={{ color: 'success.main', fontWeight: 'bold' }}>
-                  {formatPrice(receitaHoje)}
-                </Typography>
+                <Typography variant="h6" sx={{ color: 'success.main', fontWeight: 'bold' }}>{formatPrice(receitaHoje)}</Typography>
               </Box>
-
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="body1" color="text.secondary">Despesas (Hoje)</Typography>
-                <Typography variant="h6" sx={{ color: 'error.main', fontWeight: 'bold' }}>
-                  - {formatPrice(despesaHoje)}
-                </Typography>
+                <Typography variant="h6" sx={{ color: 'error.main', fontWeight: 'bold' }}>- {formatPrice(despesaHoje)}</Typography>
               </Box>
-
               <Divider />
-
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#f8f9fa', p: 2, borderRadius: 2 }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Saldo do Dia</Typography>
-                <Typography variant="h5" sx={{ color: saldoHoje >= 0 ? 'primary.main' : 'error.main', fontWeight: 'bold' }}>
-                  {formatPrice(saldoHoje)}
-                </Typography>
+                <Typography variant="h5" sx={{ color: saldoHoje >= 0 ? 'primary.main' : 'error.main', fontWeight: 'bold' }}>{formatPrice(saldoHoje)}</Typography>
               </Box>
 
-              <Button variant="outlined" fullWidth sx={{ mt: 2 }} onClick={() => document.getElementById('tab-Financeiro')?.click()}>
+              <Button variant="outlined" fullWidth sx={{ mt: 2 }} onClick={goToFinances}>
                 Ver Relatório Mensal Completo
               </Button>
-
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      {/* DIÁLOGO: EDIÇÃO RÁPIDA (REAGENDAR) */}
-      <Dialog open={editModalOpen} onClose={() => setEditModalOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>Edição Rápida</DialogTitle>
-        <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {/* DIÁLOGO: EDIÇÃO COMPLETA */}
+      <Dialog open={editModalOpen} onClose={() => setEditModalOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle sx={{ fontWeight: 'bold' }}>Detalhes do Atendimento</DialogTitle>
+        <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
           
+          <Button 
+            variant="outlined" startIcon={<ClipboardList />} fullWidth
+            color={existingAnamnesis ? "success" : "secondary"}
+            onClick={() => { if (!formData.clientId) return; setAnamnesisOpen(true); }}
+            sx={{ mb: 1, fontWeight: 'bold', borderWidth: 2 }}
+          >
+            {existingAnamnesis ? 'VER Ficha de Anamnese (Preenchida)' : 'CRIAR Ficha de Anamnese'}
+          </Button>
+
+          <Autocomplete
+            options={[...clients].sort((a, b) => (a.name || '').localeCompare(b.name || ''))}
+            getOptionLabel={(option) => option.name || ""}
+            value={clients.find(c => c.id === formData.clientId) || null}
+            onChange={(_, newValue) => setFormData({ ...formData, clientId: newValue ? newValue.id : '' })}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            renderInput={(params) => <TextField {...params} label="Cliente" fullWidth />}
+            renderOption={(props, option) => (
+              <Box component="li" {...props} key={option.id} sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <Avatar sx={{ width: 24, height: 24, fontSize: 12, bgcolor: 'primary.main' }}>
+                  {option.name ? option.name[0].toUpperCase() : '?'}
+                </Avatar>
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{option.name}</Typography>
+                </Box>
+              </Box>
+            )}
+          />
+          
+          <FormControl fullWidth>
+            <InputLabel>Serviço</InputLabel>
+            <Select value={formData.service} label="Serviço" onChange={(e) => {
+              const sObj = services.find(s => s.name === e.target.value);
+              setFormData({ ...formData, service: e.target.value, price: sObj ? sObj.price : 0 });
+            }}>
+              {services.map(s => <MenuItem key={s.id} value={s.name}>{s.name}</MenuItem>)}
+            </Select>
+          </FormControl>
+
+          <TextField type="number" label="Valor do Serviço (R$)" fullWidth value={formData.price} onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })} />
+
           <Box sx={{ display: 'flex', gap: 2 }}>
-            <TextField type="date" label="Data" fullWidth InputLabelProps={{ shrink: true }} value={editForm.date} onChange={(e) => setEditForm({...editForm, date: e.target.value})} />
-            <TextField type="time" label="Hora" fullWidth InputLabelProps={{ shrink: true }} value={editForm.time} onChange={(e) => setEditForm({...editForm, time: e.target.value})} />
+            <TextField type="date" label="Data" fullWidth InputLabelProps={{ shrink: true }} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
+            <TextField type="time" label="Hora" fullWidth InputLabelProps={{ shrink: true }} value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} />
           </Box>
 
           <FormControl fullWidth>
             <InputLabel>Status</InputLabel>
-            <Select value={editForm.status} label="Status" onChange={(e) => setEditForm({...editForm, status: e.target.value})}>
+            <Select value={formData.status} label="Status" onChange={(e) => setFormData({...formData, status: e.target.value})}>
               <MenuItem value="agendado">Agendado</MenuItem>
               <MenuItem value="concluido">Concluído</MenuItem>
               <MenuItem value="reagendado">Reagendado</MenuItem>
@@ -358,13 +390,24 @@ export function Dashboard() {
             </Select>
           </FormControl>
 
+          <TextField label="Observações" fullWidth multiline rows={3} value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})} />
+
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setEditModalOpen(false)} color="inherit">Cancelar</Button>
-          <Button onClick={handleSaveEdit} variant="contained">Salvar Alterações</Button>
+        <DialogActions sx={{ p: 2, flexWrap: 'wrap', gap: 1, justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <IconButton color="error" onClick={() => { if(confirm('Excluir agendamento?')) { deleteAppointment(editingId as string); setEditModalOpen(false); } }}><Trash2 size={20} /></IconButton>
+            <Button color="warning" variant="outlined" onClick={handlePrepareReschedule} startIcon={<CalendarClock size={18}/>}>Reagendar</Button>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button onClick={() => setEditModalOpen(false)} color="inherit">Sair</Button>
+            <Button onClick={handleSaveEdit} variant="contained">Atualizar</Button>
+          </Box>
         </DialogActions>
       </Dialog>
 
+      {formData.clientId && (
+        <AnamnesisForm open={anamnesisOpen} onClose={() => setAnamnesisOpen(false)} clientId={formData.clientId} existingData={existingAnamnesis} />
+      )}
     </Box>
   );
 }
