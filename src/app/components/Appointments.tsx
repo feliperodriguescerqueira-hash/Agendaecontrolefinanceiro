@@ -11,7 +11,7 @@ import { ptBR } from 'date-fns/locale';
 import { AnamnesisForm } from './AnamnesisForm';
 
 export function Appointments() {
-  const { appointments = [], clients = [], services = [], anamnesis = [], addAppointment, updateAppointment, deleteAppointment } = useAppData();
+  const { appointments = [], clients = [], services = [], anamnesis = [], addAppointment, updateAppointment, deleteAppointment, addFinance } = useAppData();
   
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -37,6 +37,13 @@ export function Appointments() {
     } catch (e) { return null; }
   };
 
+  const extractDateOnly = (dateValue: any) => {
+    if (!dateValue) return '';
+    if (typeof dateValue === 'string') return dateValue.split('T')[0];
+    if (dateValue instanceof Date) return format(dateValue, 'yyyy-MM-dd');
+    return String(dateValue).split('T')[0];
+  };
+
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
 
@@ -59,7 +66,7 @@ export function Appointments() {
 
   const handleEdit = (app: any) => {
     setEditingId(app.id);
-    setFormData({ clientId: app.clientId, service: app.service, price: app.price || 0, date: app.date, time: app.time || '09:00', notes: app.notes || '', status: app.status || 'agendado' });
+    setFormData({ clientId: app.clientId, service: app.service, price: app.price || 0, date: extractDateOnly(app.date), time: app.time || '09:00', notes: app.notes || '', status: app.status || 'agendado' });
     setOpen(true);
   };
 
@@ -68,11 +75,50 @@ export function Appointments() {
     setEditingId(null);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.clientId || !formData.service) { alert("Selecione uma cliente e um serviço!"); return; }
-    if (editingId) { updateAppointment(editingId, { ...formData, price: Number(formData.price) }); } 
-    else { addAppointment({ id: Date.now().toString(), ...formData, price: Number(formData.price) }); }
-    handleClose();
+    
+    const valorNumerico = Number(formData.price || 0);
+    const dataOriginalAgendamento = extractDateOnly(formData.date);
+    const client = clients.find(c => c.id === formData.clientId);
+
+    try {
+      if (editingId) { 
+        const originalApp = appointments.find(a => a.id === editingId);
+        await updateAppointment(editingId, { ...formData, price: valorNumerico, date: dataOriginalAgendamento }); 
+        
+        // Lança a receita se mudou para "concluído"
+        if (formData.status === 'concluido' && originalApp?.status !== 'concluido' && valorNumerico > 0) {
+          await addFinance({
+            id: Date.now().toString(),
+            type: 'receita',
+            description: `Atendimento: ${formData.service} (${client?.name || 'Cliente'})`,
+            value: valorNumerico,
+            date: dataOriginalAgendamento,
+            category: 'Serviços'
+          });
+        }
+      } 
+      else { 
+        await addAppointment({ id: Date.now().toString(), ...formData, price: valorNumerico, date: dataOriginalAgendamento }); 
+        
+        // Lança a receita se já foi criado como "concluído"
+        if (formData.status === 'concluido' && valorNumerico > 0) {
+          await addFinance({
+            id: Date.now().toString(),
+            type: 'receita',
+            description: `Atendimento: ${formData.service} (${client?.name || 'Cliente'})`,
+            value: valorNumerico,
+            date: dataOriginalAgendamento,
+            category: 'Serviços'
+          });
+        }
+      }
+      handleClose();
+    } catch (error) {
+      console.error("Erro ao salvar agendamento:", error);
+      alert("Ocorreu um erro ao salvar o agendamento.");
+    }
   };
 
   const handlePrepareReschedule = () => {
