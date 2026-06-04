@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   Box, Typography, IconButton, List, ListItem, ListItemIcon, 
   ListItemText, Tooltip, Divider, ListItemButton,
-  CssBaseline
+  CssBaseline, GlobalStyles 
 } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { 
@@ -73,6 +73,20 @@ export default function App() {
     <ThemeProvider theme={mariTheme}>
       <CssBaseline /> 
       
+      {/* 👇 ESTILOS GLOBAIS PARA COMPORTAMENTO DE APP NATIVO NO TABLET 👇 */}
+      <GlobalStyles styles={{
+        'html, body': {
+          overscrollBehaviorY: 'none', // Evita o "puxar para atualizar"
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'none',    // Evita seleção de texto acidental com toques rápidos
+          userSelect: 'none',
+        },
+        'input, textarea': {
+          WebkitUserSelect: 'auto',    // Garante que os inputs continuem funcionando normalmente
+          userSelect: 'auto',
+        }
+      }} />
+      
       <Box sx={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', bgcolor: 'background.default' }}>
         
         {/* SIDEBAR */}
@@ -85,9 +99,9 @@ export default function App() {
             display: 'flex', flexDirection: 'column', zIndex: 10,
           }}>
           
-          {/* CABEÇALHO DO MENU COM A LOGO (REFORMULADO) */}
+          {/* CABEÇALHO DO MENU COM A LOGO */}
           <Box sx={{ 
-            minHeight: isSidebarOpen ? 220 : 80, // Aumentado para dar mais respiro à logo maior
+            minHeight: isSidebarOpen ? 220 : 80, 
             display: 'flex', 
             flexDirection: isSidebarOpen ? 'column' : 'row',
             alignItems: 'center', 
@@ -105,8 +119,8 @@ export default function App() {
                   src={logoMari} 
                   alt="Logo Mari Moraes" 
                   style={{ 
-                    width: '190px',  // Logo ampliada
-                    height: '190px', // Logo ampliada
+                    width: '190px', 
+                    height: '190px', 
                     objectFit: 'contain'
                   }}
                 />
@@ -161,7 +175,7 @@ export default function App() {
             </Tooltip>
 
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: '500', textAlign: 'center' }}>
-              {isSidebarOpen ? 'Feito com carinho ❤️ v1.1' : '❤️ v1.1'}
+              {isSidebarOpen ? 'Feito com carinho ❤️ v2' : '❤️ v2'}
             </Typography>
 
           </Box>

@@ -1,8 +1,23 @@
 {
-    "name": "Espaço Mari Moraes",
-    "short_name": "Mari Moraes",
-    "start_url": "/",
-    "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#000000"
-  }
+  "name": "Studio Mari Moraes",
+  "short_name": "Studio Mari",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f6f8",
+  "theme_color": "#e91e63",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/logomarimoraes.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logomarimoraes.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
