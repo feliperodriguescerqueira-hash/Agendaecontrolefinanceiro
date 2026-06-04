@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
 import {
-  Card, CardContent, CardHeader, Typography, Box, Grid, Divider, Button, 
-  IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, 
+  Card, CardContent, CardHeader, Typography, Box, Grid, Divider, Button,
+  IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, FormControl, InputLabel, Select, MenuItem, Tooltip, Autocomplete, Avatar
 } from '@mui/material';
-import { 
-  Calendar, DollarSign, CheckCircle, Clock, MessageCircle, 
+import {
+  Calendar, DollarSign, CheckCircle, Clock, MessageCircle,
   CalendarClock, Wallet, ClipboardList, Trash2
 } from 'lucide-react';
 import { useAppData } from '../hooks/useAppData';
@@ -20,7 +20,6 @@ export function Dashboard() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [anamnesisOpen, setAnamnesisOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  
   const [formData, setFormData] = useState({
     clientId: '', service: '', price: 0, date: '', time: '', status: '', notes: ''
   });
@@ -36,6 +35,13 @@ export function Dashboard() {
       if (dateValue instanceof Date) return dateValue;
       return parseISO(String(dateValue).split('T')[0]);
     } catch (e) { return null; }
+  };
+
+  const extractDateOnly = (dateValue: any) => {
+    if (!dateValue) return '';
+    if (typeof dateValue === 'string') return dateValue.split('T')[0];
+    if (dateValue instanceof Date) return format(dateValue, 'yyyy-MM-dd');
+    return String(dateValue).split('T')[0];
   };
 
   const formatPrice = (val: number) => {
@@ -71,10 +77,10 @@ export function Dashboard() {
   const saldoHoje = receitaHoje - despesaHoje;
 
   const handleWhatsApp = (e: any, clientId: string) => {
-    e.stopPropagation(); 
+    e.stopPropagation();
     const client = clients.find(c => c.id === clientId);
     if (client?.phone) {
-      const cleanPhone = client.phone.replace(/\D/g, ''); 
+      const cleanPhone = client.phone.replace(/\D/g, '');
       window.open(`https://wa.me/55${cleanPhone}`, '_blank');
     } else {
       alert('Este cliente não tem telefone cadastrado.');
@@ -83,15 +89,16 @@ export function Dashboard() {
 
   // 👇 SISTEMA DE CONCLUSÃO BLINDADO
   const handleComplete = async (e: any, app: any) => {
-    e.stopPropagation(); 
+    e.stopPropagation();
     const valorNumerico = Number(app.price || 0);
+    const dataOriginalAgendamento = extractDateOnly(app.date);
 
     if (confirm(`Deseja marcar o serviço "${app.service}" como concluído? O valor de ${formatPrice(valorNumerico)} será lançado no financeiro automaticamente.`)) {
       try {
-        // 1. Muda o status
-        await updateAppointment(app.id, { ...app, status: 'concluido', price: valorNumerico });
+        // 1. Muda o status e garante que a data permaneça a original
+        await updateAppointment(app.id, { ...app, status: 'concluido', price: valorNumerico, date: dataOriginalAgendamento });
         
-        // 2. Lança a receita se for maior que zero
+        // 2. Lança a receita vinculada ao dia do agendamento
         if (valorNumerico > 0) {
           const client = clients.find(c => c.id === app.clientId);
           await addFinance({
@@ -99,7 +106,7 @@ export function Dashboard() {
             type: 'receita',
             description: `Atendimento: ${app.service} (${client?.name || 'Cliente'})`,
             value: valorNumerico,
-            date: app.date,
+            date: dataOriginalAgendamento, // Mantém contabilidade na data correta
             category: 'Serviços'
           });
         }
@@ -116,7 +123,7 @@ export function Dashboard() {
       clientId: app.clientId,
       service: app.service,
       price: Number(app.price || 0),
-      date: app.date,
+      date: extractDateOnly(app.date), // Evita problemas na exibição do modal
       time: app.time || '09:00',
       status: app.status || 'agendado',
       notes: app.notes || ''
@@ -130,8 +137,9 @@ export function Dashboard() {
       try {
         const originalApp = appointments.find(a => a.id === editingId);
         const valorNumerico = Number(formData.price || 0);
+        const dataOriginalAgendamento = extractDateOnly(formData.date);
 
-        await updateAppointment(editingId, { ...formData, price: valorNumerico });
+        await updateAppointment(editingId, { ...formData, price: valorNumerico, date: dataOriginalAgendamento });
         
         if (formData.status === 'concluido' && originalApp?.status !== 'concluido' && valorNumerico > 0) {
           const client = clients.find(c => c.id === formData.clientId);
@@ -140,7 +148,7 @@ export function Dashboard() {
             type: 'receita',
             description: `Atendimento: ${formData.service} (${client?.name || 'Cliente'})`,
             value: valorNumerico,
-            date: formData.date,
+            date: dataOriginalAgendamento, // Mantém contabilidade na data correta
             category: 'Serviços'
           });
         }
@@ -182,7 +190,6 @@ export function Dashboard() {
 
   return (
     <Box sx={{ p: { xs: 1, md: 3 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
-      
       <Box>
         <Typography variant="h5" sx={{ fontWeight: 'bold' }}>Olá, Mari! 👋</Typography>
         <Typography variant="body1" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
@@ -202,7 +209,6 @@ export function Dashboard() {
             </CardContent>
           </Card>
         </Grid>
-        
         <Grid item xs={12} sm={6} md={3}>
           <Card sx={{ borderLeft: '4px solid #2196f3', height: '100%' }}>
             <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -259,11 +265,11 @@ export function Dashboard() {
                     const isCancelado = app.status === 'cancelado';
 
                     return (
-                      <Card 
-                        key={app.id} 
-                        variant="outlined" 
+                      <Card
+                        key={app.id}
+                        variant="outlined"
                         onClick={() => openEditModal(app)}
-                        sx={{ 
+                        sx={{
                           display: 'flex', flexWrap: 'wrap', alignItems: 'center', p: 2, gap: 2, cursor: 'pointer',
                           bgcolor: isConcluido ? '#f5f5f5' : isCancelado ? '#fff0f0' : 'white',
                           opacity: (isConcluido || isCancelado) ? 0.7 : 1,
@@ -298,7 +304,6 @@ export function Dashboard() {
                               </IconButton>
                             </Tooltip>
                           )}
-                          
                           {(!isConcluido && !isCancelado) && (
                             <Button variant="contained" color="success" size="small" startIcon={<CheckCircle size={16} />} onClick={(e) => handleComplete(e, app)} sx={{ ml: 1 }}>
                               Concluir
@@ -345,8 +350,7 @@ export function Dashboard() {
       <Dialog open={editModalOpen} onClose={() => setEditModalOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle sx={{ fontWeight: 'bold' }}>Detalhes do Atendimento</DialogTitle>
         <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
-          
-          <Button 
+          <Button
             variant="outlined" startIcon={<ClipboardList />} fullWidth
             color={existingAnamnesis ? "success" : "secondary"}
             onClick={() => { if (!formData.clientId) return; setAnamnesisOpen(true); }}
@@ -373,7 +377,6 @@ export function Dashboard() {
               </Box>
             )}
           />
-          
           <FormControl fullWidth>
             <InputLabel>Serviço</InputLabel>
             <Select value={formData.service} label="Serviço" onChange={(e) => {
@@ -387,13 +390,13 @@ export function Dashboard() {
           <TextField type="number" label="Valor do Serviço (R$)" fullWidth value={formData.price} onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })} />
 
           <Box sx={{ display: 'flex', gap: 2 }}>
-            <TextField type="date" label="Data" fullWidth InputLabelProps={{ shrink: true }} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
-            <TextField type="time" label="Hora" fullWidth InputLabelProps={{ shrink: true }} value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} />
+            <TextField type="date" label="Data" fullWidth InputLabelProps={{ shrink: true }} value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
+            <TextField type="time" label="Hora" fullWidth InputLabelProps={{ shrink: true }} value={formData.time} onChange={(e) => setFormData({ ...formData, time: e.target.value })} />
           </Box>
 
           <FormControl fullWidth>
             <InputLabel>Status</InputLabel>
-            <Select value={formData.status} label="Status" onChange={(e) => setFormData({...formData, status: e.target.value})}>
+            <Select value={formData.status} label="Status" onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
               <MenuItem value="agendado">Agendado</MenuItem>
               <MenuItem value="concluido">Concluído</MenuItem>
               <MenuItem value="reagendado">Reagendado</MenuItem>
@@ -401,13 +404,13 @@ export function Dashboard() {
             </Select>
           </FormControl>
 
-          <TextField label="Observações" fullWidth multiline rows={3} value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})} />
+          <TextField label="Observações" fullWidth multiline rows={3} value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
 
         </DialogContent>
         <DialogActions sx={{ p: 2, flexWrap: 'wrap', gap: 1, justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <IconButton color="error" onClick={() => { if(confirm('Excluir agendamento?')) { deleteAppointment(editingId as string); setEditModalOpen(false); } }}><Trash2 size={20} /></IconButton>
-            <Button color="warning" variant="outlined" onClick={handlePrepareReschedule} startIcon={<CalendarClock size={18}/>}>Reagendar</Button>
+            <IconButton color="error" onClick={() => { if (confirm('Excluir agendamento?')) { deleteAppointment(editingId as string); setEditModalOpen(false); } }}><Trash2 size={20} /></IconButton>
+            <Button color="warning" variant="outlined" onClick={handlePrepareReschedule} startIcon={<CalendarClock size={18} />}>Reagendar</Button>
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button onClick={() => setEditModalOpen(false)} color="inherit">Sair</Button>
