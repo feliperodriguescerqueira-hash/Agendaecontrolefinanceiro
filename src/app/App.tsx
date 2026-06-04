@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
   Box, Typography, IconButton, List, ListItem, ListItemIcon, 
-  ListItemText, Tooltip, Divider, Avatar, ListItemButton,
+  ListItemText, Tooltip, Divider, ListItemButton,
   CssBaseline
 } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -9,6 +9,9 @@ import {
   Menu, LayoutDashboard, Calendar as CalendarIcon, Users, 
   DollarSign, Scissors, ClipboardList, Sun, Moon 
 } from 'lucide-react';
+
+// Importando a logo nativamente pelo Vite (Garante o carregamento)
+import logoMari from './logomarimoraes.png';
 
 // Importando as nossas telas
 import { Dashboard } from './components/Dashboard';
@@ -23,7 +26,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [currentPage, setCurrentPage] = useState('dashboard');
   
-  // 👇 Estado que controla se o Modo Escuro está ativado
+  // Estado que controla se o Modo Escuro está ativado
   const [isDarkMode, setIsDarkMode] = useState(false); 
   
   const { fetchData } = useAppData();
@@ -54,7 +57,7 @@ export default function App() {
     { id: 'finances', label: 'Financeiro', icon: <DollarSign size={24} /> },
   ];
 
-  // 👇 O TEMA AGORA É DINÂMICO (Muda dependendo do isDarkMode)
+  // O TEMA AGORA É DINÂMICO
   const mariTheme = useMemo(() => createTheme({
     palette: {
       mode: isDarkMode ? 'dark' : 'light',
@@ -68,30 +71,60 @@ export default function App() {
 
   return (
     <ThemeProvider theme={mariTheme}>
-      {/* CssBaseline é obrigatório para o MUI aplicar a inversão de cores globais no texto e fundo */}
       <CssBaseline /> 
       
       <Box sx={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', bgcolor: 'background.default' }}>
         
         {/* SIDEBAR */}
         <Box sx={{
-            width: isSidebarOpen ? 280 : 72, // 👈 Largura aumentada para não cortar o nome!
+            width: isSidebarOpen ? 280 : 72,
             transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             bgcolor: 'background.paper', 
             borderRight: '1px solid',
             borderColor: 'divider',
             display: 'flex', flexDirection: 'column', zIndex: 10,
           }}>
-          <Box sx={{ height: 72, display: 'flex', alignItems: 'center', justifyContent: isSidebarOpen ? 'space-between' : 'center', px: isSidebarOpen ? 2 : 0, borderBottom: '1px solid', borderColor: 'divider' }}>
+          
+          {/* CABEÇALHO DO MENU COM A LOGO (REFORMULADO) */}
+          <Box sx={{ 
+            minHeight: isSidebarOpen ? 220 : 80, // Aumentado para dar mais respiro à logo maior
+            display: 'flex', 
+            flexDirection: isSidebarOpen ? 'column' : 'row',
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            p: 2,
+            borderBottom: '1px solid', 
+            borderColor: 'divider',
+            position: 'relative',
+            bgcolor: 'transparent'
+          }}>
+            
             {isSidebarOpen && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, overflow: 'hidden' }}>
-                <Avatar sx={{ bgcolor: 'primary.main', width: 36, height: 36 }}><Scissors size={20} /></Avatar>
-                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main', whiteSpace: 'nowrap' }}>
-                  Studio Mari Moraes
-                </Typography>
+              <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', mt: 2 }}>
+                <img 
+                  src={logoMari} 
+                  alt="Logo Mari Moraes" 
+                  style={{ 
+                    width: '190px',  // Logo ampliada
+                    height: '190px', // Logo ampliada
+                    objectFit: 'contain'
+                  }}
+                />
               </Box>
             )}
-            <IconButton onClick={() => setIsSidebarOpen(!isSidebarOpen)} color="primary"><Menu size={24} /></IconButton>
+
+            {/* Botão Hambúrguer flutuante quando aberto, centralizado quando fechado */}
+            <IconButton 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+              color="primary"
+              sx={{
+                position: isSidebarOpen ? 'absolute' : 'static',
+                top: isSidebarOpen ? 8 : 'auto',
+                right: isSidebarOpen ? 8 : 'auto'
+              }}
+            >
+              <Menu size={24} />
+            </IconButton>
           </Box>
 
           <List sx={{ pt: 2, px: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -118,7 +151,7 @@ export default function App() {
           <Box sx={{ flexGrow: 1 }} />
           <Divider />
           
-          {/* 👇 BOTÃO DE MODO ESCURO E ASSINATURA 👇 */}
+          {/* BOTÃO DE MODO ESCURO E ASSINATURA */}
           <Box sx={{ p: isSidebarOpen ? 2 : 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
             
             <Tooltip title={isDarkMode ? "Mudar para Modo Claro" : "Mudar para Modo Escuro"} placement="right">
