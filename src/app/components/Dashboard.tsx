@@ -20,8 +20,12 @@ export function Dashboard() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [anamnesisOpen, setAnamnesisOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    clientId: '', service: '', price: 0, date: '', time: '', status: '', notes: ''
+  
+  // Modificado: 'service' virou 'services' (Array)
+  const [formData, setFormData] = useState<{
+    clientId: string; services: string[]; price: number; date: string; time: string; status: string; notes: string;
+  }>({
+    clientId: '', services: [], price: 0, date: '', time: '', status: '', notes: ''
   });
 
   const existingAnamnesis = useMemo(() => {
@@ -95,10 +99,8 @@ export function Dashboard() {
 
     if (confirm(`Deseja marcar o serviço "${app.service}" como concluído? O valor de ${formatPrice(valorNumerico)} será lançado no financeiro automaticamente.`)) {
       try {
-        // 1. Muda o status e garante que a data permaneça a original
         await updateAppointment(app.id, { ...app, status: 'concluido', price: valorNumerico, date: dataOriginalAgendamento });
         
-        // 2. Lança a receita vinculada ao dia do agendamento
         if (valorNumerico > 0) {
           const client = clients.find(c => c.id === app.clientId);
           await addFinance({
@@ -106,7 +108,7 @@ export function Dashboard() {
             type: 'receita',
             description: `Atendimento: ${app.service} (${client?.name || 'Cliente'})`,
             value: valorNumerico,
-            date: dataOriginalAgendamento, // Mantém contabilidade na data correta
+            date: dataOriginalAgendamento,
             category: 'Serviços'
           });
         }
@@ -121,9 +123,9 @@ export function Dashboard() {
     setEditingId(app.id);
     setFormData({
       clientId: app.clientId,
-      service: app.service,
+      services: app.service ? app.service.split(',').map((s: string) => s.trim()) : [], 
       price: Number(app.price || 0),
-      date: extractDateOnly(app.date), // Evita problemas na exibição do modal
+      date: extractDateOnly(app.date),
       time: app.time || '09:00',
       status: app.status || 'agendado',
       notes: app.notes || ''
@@ -131,24 +133,40 @@ export function Dashboard() {
     setEditModalOpen(true);
   };
 
-  // 👇 EDIÇÃO MANUAL BLINDADA
+  // 👇 EDIÇÃO MANUAL BLINDADA COM MÚLTIPLOS SERVIÇOS
   const handleSaveEdit = async () => {
     if (editingId) {
+      if (!formData.clientId || formData.services.length === 0) { 
+        alert("Selecione uma cliente e pelo menos um serviço!"); 
+        return; 
+      }
+
       try {
         const originalApp = appointments.find(a => a.id === editingId);
         const valorNumerico = Number(formData.price || 0);
         const dataOriginalAgendamento = extractDateOnly(formData.date);
+        const servicosUnidos = formData.services.join(', ');
 
-        await updateAppointment(editingId, { ...formData, price: valorNumerico, date: dataOriginalAgendamento });
+        const appPayload = {
+          clientId: formData.clientId,
+          service: servicosUnidos,
+          price: valorNumerico,
+          date: dataOriginalAgendamento,
+          time: formData.time,
+          status: formData.status as any,
+          notes: formData.notes
+        };
+
+        await updateAppointment(editingId, appPayload);
         
         if (formData.status === 'concluido' && originalApp?.status !== 'concluido' && valorNumerico > 0) {
           const client = clients.find(c => c.id === formData.clientId);
           await addFinance({
             id: Date.now().toString(),
             type: 'receita',
-            description: `Atendimento: ${formData.service} (${client?.name || 'Cliente'})`,
+            description: `Atendimento: ${servicosUnidos} (${client?.name || 'Cliente'})`,
             value: valorNumerico,
-            date: dataOriginalAgendamento, // Mantém contabilidade na data correta
+            date: dataOriginalAgendamento,
             category: 'Serviços'
           });
         }
@@ -171,7 +189,8 @@ export function Dashboard() {
 
   const handlePrepareReschedule = () => {
     if (!editingId) return;
-    updateAppointment(editingId, { ...formData, status: 'reagendado' });
+    
+    updateAppointment(editingId, { ...formData, service: formData.services.join(', '), status: 'reagendado' } as any);
     const oldDateStr = formData.date ? format(parseISO(formData.date), 'dd/MM/yyyy') : 'data anterior';
     const autoNote = `[Origem: Reagendado do dia ${oldDateStr} às ${formData.time}]`;
     setEditingId(null);
@@ -347,7 +366,7 @@ export function Dashboard() {
       </Grid>
 
       {/* DIÁLOGO: EDIÇÃO COMPLETA */}
-      <Dialog open={editModalOpen} onClose={() => setEditModalOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={editModalOpen} onClose={() => setEditModalOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle sx={{ fontWeight: 'bold' }}>Detalhes do Atendimento</DialogTitle>
         <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
           <Button
@@ -377,17 +396,27 @@ export function Dashboard() {
               </Box>
             )}
           />
-          <FormControl fullWidth>
-            <InputLabel>Serviço</InputLabel>
-            <Select value={formData.service} label="Serviço" onChange={(e) => {
-              const sObj = services.find(s => s.name === e.target.value);
-              setFormData({ ...formData, service: e.target.value, price: sObj ? sObj.price : 0 });
-            }}>
-              {services.map(s => <MenuItem key={s.id} value={s.name}>{s.name}</MenuItem>)}
-            </Select>
-          </FormControl>
 
-          <TextField type="number" label="Valor do Serviço (R$)" fullWidth value={formData.price} onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })} />
+          <Autocomplete
+            multiple
+            options={[...services].sort((a, b) => a.name.localeCompare(b.name))}
+            getOptionLabel={(option) => option.name}
+            value={services.filter(s => formData.services.includes(s.name))}
+            onChange={(_, newValue) => {
+              const selectedNames = newValue.map(v => v.name);
+              const totalPrice = newValue.reduce((sum, item) => sum + Number(item.price || 0), 0);
+              setFormData({ ...formData, services: selectedNames, price: totalPrice });
+            }}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            renderInput={(params) => <TextField {...params} label="Serviços (Selecione um ou mais)" placeholder="Ex: Pé e Mão..." />}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip size="small" variant="outlined" label={option.name} {...getTagProps({ index })} />
+              ))
+            }
+          />
+
+          <TextField type="number" label="Valor Total (R$)" fullWidth value={formData.price} onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })} helperText="Você pode ajustar este valor manualmente, se necessário." />
 
           <Box sx={{ display: 'flex', gap: 2 }}>
             <TextField type="date" label="Data" fullWidth InputLabelProps={{ shrink: true }} value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} />

@@ -10,7 +10,17 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 // Interfaces de Dados
 export interface Client { id: string; name: string; phone: string; email: string; notes?: string; }
 export interface Service { id: string; name: string; duration: number; price: number; category: string; }
-export interface Appointment { id: string; clientId: string; service: string; date: string; time: string; price: number; status: 'agendado' | 'concluido' | 'cancelado' | 'reagendado'; notes?: string; }
+export interface Appointment { 
+  id: string; 
+  clientId: string; 
+  service: string; 
+  services?: string[]; // Frontend: Array para gerenciar múltiplos serviços no formulário
+  date: string; 
+  time: string; 
+  price: number; 
+  status: 'agendado' | 'concluido' | 'cancelado' | 'reagendado'; 
+  notes?: string; 
+}
 export interface Finance { id: string; type: 'receita' | 'despesa'; description: string; value: number; date: string; category: string; }
 
 // NOVA INTERFACE: Ficha de Anamnese (Modelo Jeane Braz)
@@ -43,7 +53,6 @@ export interface Anamnesis {
   objetivos: string[];
   expectativa?: string;
   observacoes_esteticista?: string;
-  // 👇 OS 3 CAMPOS NOVOS DE ASSINATURA E TERMOS AQUI 👇
   assinatura_paciente?: string;
   assinatura_profissional?: string;
   termo_aceito?: boolean;
@@ -54,7 +63,7 @@ interface AppState {
   services: Service[];
   appointments: Appointment[];
   finances: Finance[];
-  anamnesis: Anamnesis[]; // Nova lista de fichas
+  anamnesis: Anamnesis[];
   isLoading: boolean;
   fetchData: () => Promise<void>;
   addClient: (client: Client) => Promise<void>;
@@ -70,7 +79,7 @@ interface AppState {
   deleteAppointment: (id: string) => Promise<void>;
   addFinance: (finance: Finance) => Promise<void>;
   deleteFinance: (id: string) => Promise<void>;
-  saveAnamnesis: (data: Anamnesis) => Promise<void>; // Função para salvar/atualizar ficha
+  saveAnamnesis: (data: Anamnesis) => Promise<void>;
 }
 
 export const useAppData = create<AppState>((set, get) => ({
@@ -78,7 +87,7 @@ export const useAppData = create<AppState>((set, get) => ({
   services: [],
   appointments: [],
   finances: [],
-  anamnesis: [], // Estado inicial das fichas vazio
+  anamnesis: [],
   isLoading: false,
 
   fetchData: async () => {
@@ -86,16 +95,14 @@ export const useAppData = create<AppState>((set, get) => ({
     console.log("🔄 Iniciando busca de dados no Supabase...");
 
     try {
-      // Busca todas as tabelas em paralelo para maior performance
       const [clientsRes, servicesRes, appsRes, finsRes, anamnesisRes] = await Promise.all([
         supabase.from('clients').select('*').order('name', { ascending: true }),
         supabase.from('services').select('*').order('name', { ascending: true }),
         supabase.from('appointments').select('*').order('date', { ascending: false }),
         supabase.from('finances').select('*').order('date', { ascending: false }),
-        supabase.from('anamnesis').select('*').order('data_atendimento', { ascending: false }) // Busca as fichas
+        supabase.from('anamnesis').select('*').order('data_atendimento', { ascending: false })
       ]);
 
-      // Verificação de erros específica para cada tabela no console
       if (clientsRes.error) console.error("❌ Erro na tabela Clients:", clientsRes.error.message);
       if (servicesRes.error) console.error("❌ Erro na tabela Services:", servicesRes.error.message);
       if (appsRes.error) console.error("❌ Erro na tabela Appointments:", appsRes.error.message);
@@ -107,7 +114,7 @@ export const useAppData = create<AppState>((set, get) => ({
         services: servicesRes.data || [],
         appointments: appsRes.data || [],
         finances: finsRes.data || [],
-        anamnesis: anamnesisRes.data || [], // Salva as fichas no estado
+        anamnesis: anamnesisRes.data || [],
         isLoading: false
       });
       
@@ -118,7 +125,6 @@ export const useAppData = create<AppState>((set, get) => ({
     }
   },
 
-  // --- FUNÇÕES DE CLIENTES ---
   addClient: async (client) => {
     await supabase.from('clients').insert([client]);
     await get().fetchData();
@@ -144,7 +150,6 @@ export const useAppData = create<AppState>((set, get) => ({
     await get().fetchData();
   },
 
-  // --- FUNÇÕES DE SERVIÇOS ---
   addService: async (service) => {
     const { error } = await supabase.from('services').insert([service]);
     if (error) alert("Erro ao salvar serviço: " + error.message);
@@ -163,14 +168,18 @@ export const useAppData = create<AppState>((set, get) => ({
     await get().fetchData();
   },
 
-  // --- FUNÇÕES DE AGENDAMENTOS ---
+  // 👇 INTERCEPTORES ADICIONADOS AQUI 👇
   addAppointment: async (app) => {
-    await supabase.from('appointments').insert([app]);
+    // Separa a propriedade "services" (array) do resto do objeto que vai para o banco
+    const { services, ...dbApp } = app;
+    await supabase.from('appointments').insert([dbApp]);
     await get().fetchData();
   },
 
   updateAppointment: async (id, updated) => {
-    await supabase.from('appointments').update(updated).eq('id', id);
+    // Separa a propriedade "services" (array) do resto do objeto que vai para o banco
+    const { services, ...dbApp } = updated;
+    await supabase.from('appointments').update(dbApp).eq('id', id);
     await get().fetchData();
   },
 
@@ -179,7 +188,6 @@ export const useAppData = create<AppState>((set, get) => ({
     await get().fetchData();
   },
 
-  // --- FUNÇÕES DE FINANCEIRO ---
   addFinance: async (finance) => {
     await supabase.from('finances').insert([finance]);
     await get().fetchData();
@@ -190,9 +198,7 @@ export const useAppData = create<AppState>((set, get) => ({
     await get().fetchData();
   },
 
-  // --- FUNÇÃO DA FICHA DE ANAMNESE ---
   saveAnamnesis: async (data) => {
-    // Usamos o 'upsert' porque ele é inteligente: se tiver ID ele atualiza, se não tiver ele cria um novo.
     const { error } = await supabase.from('anamnesis').upsert([data]);
     if (error) {
       alert("Erro ao salvar Ficha de Anamnese: " + error.message);

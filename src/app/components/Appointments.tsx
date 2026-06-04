@@ -19,9 +19,10 @@ export function Appointments() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [anamnesisOpen, setAnamnesisOpen] = useState(false);
   
-  const [formData, setFormData] = useState({
-    clientId: '', service: '', price: 0, date: format(new Date(), 'yyyy-MM-dd'),
-    time: '09:00', notes: '', status: 'agendado'
+  const [formData, setFormData] = useState<{
+    clientId: string; services: string[]; price: number; date: string; time: string; status: string; notes: string;
+  }>({
+    clientId: '', services: [], price: 0, date: format(new Date(), 'yyyy-MM-dd'), time: '09:00', status: 'agendado', notes: ''
   });
 
   const existingAnamnesis = useMemo(() => {
@@ -60,13 +61,21 @@ export function Appointments() {
 
   const handleOpenNew = (day: Date) => {
     setEditingId(null);
-    setFormData({ clientId: '', service: '', price: 0, date: format(day, 'yyyy-MM-dd'), time: '09:00', notes: '', status: 'agendado' });
+    setFormData({ clientId: '', services: [], price: 0, date: format(day, 'yyyy-MM-dd'), time: '09:00', notes: '', status: 'agendado' });
     setOpen(true);
   };
 
   const handleEdit = (app: any) => {
     setEditingId(app.id);
-    setFormData({ clientId: app.clientId, service: app.service, price: app.price || 0, date: extractDateOnly(app.date), time: app.time || '09:00', notes: app.notes || '', status: app.status || 'agendado' });
+    setFormData({ 
+      clientId: app.clientId, 
+      services: app.service ? app.service.split(',').map((s: string) => s.trim()) : [], 
+      price: app.price || 0, 
+      date: extractDateOnly(app.date), 
+      time: app.time || '09:00', 
+      notes: app.notes || '', 
+      status: app.status || 'agendado' 
+    });
     setOpen(true);
   };
 
@@ -76,23 +85,36 @@ export function Appointments() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.clientId || !formData.service) { alert("Selecione uma cliente e um serviço!"); return; }
+    if (!formData.clientId || formData.services.length === 0) { 
+      alert("Selecione uma cliente e pelo menos um serviço!"); 
+      return; 
+    }
     
     const valorNumerico = Number(formData.price || 0);
     const dataOriginalAgendamento = extractDateOnly(formData.date);
     const client = clients.find(c => c.id === formData.clientId);
+    const servicosUnidos = formData.services.join(', ');
+
+    const appPayload = {
+      clientId: formData.clientId,
+      service: servicosUnidos,
+      price: valorNumerico,
+      date: dataOriginalAgendamento,
+      time: formData.time,
+      status: formData.status as 'agendado' | 'concluido' | 'cancelado' | 'reagendado',
+      notes: formData.notes
+    };
 
     try {
       if (editingId) { 
         const originalApp = appointments.find(a => a.id === editingId);
-        await updateAppointment(editingId, { ...formData, price: valorNumerico, date: dataOriginalAgendamento }); 
+        await updateAppointment(editingId, appPayload); 
         
-        // Lança a receita se mudou para "concluído"
         if (formData.status === 'concluido' && originalApp?.status !== 'concluido' && valorNumerico > 0) {
           await addFinance({
             id: Date.now().toString(),
             type: 'receita',
-            description: `Atendimento: ${formData.service} (${client?.name || 'Cliente'})`,
+            description: `Atendimento: ${servicosUnidos} (${client?.name || 'Cliente'})`,
             value: valorNumerico,
             date: dataOriginalAgendamento,
             category: 'Serviços'
@@ -100,14 +122,13 @@ export function Appointments() {
         }
       } 
       else { 
-        await addAppointment({ id: Date.now().toString(), ...formData, price: valorNumerico, date: dataOriginalAgendamento }); 
+        await addAppointment({ id: Date.now().toString(), ...appPayload }); 
         
-        // Lança a receita se já foi criado como "concluído"
         if (formData.status === 'concluido' && valorNumerico > 0) {
           await addFinance({
             id: Date.now().toString(),
             type: 'receita',
-            description: `Atendimento: ${formData.service} (${client?.name || 'Cliente'})`,
+            description: `Atendimento: ${servicosUnidos} (${client?.name || 'Cliente'})`,
             value: valorNumerico,
             date: dataOriginalAgendamento,
             category: 'Serviços'
@@ -123,7 +144,18 @@ export function Appointments() {
 
   const handlePrepareReschedule = () => {
     if (!editingId) return;
-    updateAppointment(editingId, { ...formData, status: 'reagendado' });
+    
+    const appPayload = {
+      clientId: formData.clientId,
+      service: formData.services.join(', '),
+      price: Number(formData.price || 0),
+      date: formData.date,
+      time: formData.time,
+      status: 'reagendado' as const,
+      notes: formData.notes
+    };
+    
+    updateAppointment(editingId, appPayload);
     const oldDateStr = formData.date ? format(parseISO(formData.date), 'dd/MM/yyyy') : 'data anterior';
     const autoNote = `[Origem: Reagendado do dia ${oldDateStr} às ${formData.time}]`;
     setEditingId(null);
@@ -190,8 +222,8 @@ export function Appointments() {
                     </Box>
                     <Typography variant="body1" sx={{ fontWeight: 'bold' }}>{client?.name || 'Cliente não encontrado'}</Typography>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
-                      <Typography variant="body2" color="text.secondary">{app.service}</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>{formatPrice(app.price || 0)}</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ flex: 1, pr: 2 }}>{app.service}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main', whiteSpace: 'nowrap' }}>{formatPrice(app.price || 0)}</Typography>
                     </Box>
                   </Box>
                 );
@@ -201,7 +233,7 @@ export function Appointments() {
         </CardContent>
       </Card>
 
-      <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs">
+      <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
         <DialogTitle sx={{ fontWeight: 'bold' }}>{editingId ? 'Detalhes do Atendimento' : 'Novo Agendamento'}</DialogTitle>
         <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
           
@@ -232,14 +264,26 @@ export function Appointments() {
             }}
           />
           
-          <FormControl fullWidth>
-            <InputLabel>Serviço</InputLabel>
-            <Select value={formData.service} label="Serviço" onChange={(e) => { const sObj = services.find(s => s.name === e.target.value); setFormData({ ...formData, service: e.target.value, price: sObj ? sObj.price : 0 }); }}>
-              {services.map(s => <MenuItem key={s.id} value={s.name}>{s.name}</MenuItem>)}
-            </Select>
-          </FormControl>
+          <Autocomplete
+            multiple
+            options={[...services].sort((a, b) => a.name.localeCompare(b.name))}
+            getOptionLabel={(option) => option.name}
+            value={services.filter(s => formData.services.includes(s.name))}
+            onChange={(_, newValue) => {
+              const selectedNames = newValue.map(v => v.name);
+              const totalPrice = newValue.reduce((sum, item) => sum + Number(item.price || 0), 0);
+              setFormData({ ...formData, services: selectedNames, price: totalPrice });
+            }}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            renderInput={(params) => <TextField {...params} label="Serviços (Selecione um ou mais)" placeholder="Ex: Pé e Mão..." />}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip size="small" variant="outlined" label={option.name} {...getTagProps({ index })} />
+              ))
+            }
+          />
 
-          <TextField type="number" label="Valor do Serviço (R$)" fullWidth value={formData.price} onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })} />
+          <TextField type="number" label="Valor Total (R$)" fullWidth value={formData.price} onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })} helperText="Você pode ajustar este valor manualmente, se necessário." />
 
           <Box sx={{ display: 'flex', gap: 2 }}>
             <TextField type="date" label="Data" fullWidth InputLabelProps={{ shrink: true }} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
