@@ -7,7 +7,7 @@ import {
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { 
   Menu, LayoutDashboard, Calendar as CalendarIcon, Users, 
-  DollarSign, Scissors, ClipboardList, Sun, Moon 
+  DollarSign, Scissors, ClipboardList, Sun, Moon, Crown 
 } from 'lucide-react';
 
 // Importando a logo nativamente pelo Vite (Garante o carregamento)
@@ -20,6 +20,7 @@ import { Clients } from './components/Clients';
 import { Services } from './components/Services';
 import { Finances } from './components/Finances';
 import { AnamnesisList } from './components/AnamnesisList';
+import { LoyaltyHub } from './components/LoyaltyHub'; // 👈 NOVA TELA IMPORTADA
 import { useAppData } from './hooks/useAppData';
 
 export default function App() {
@@ -42,18 +43,21 @@ export default function App() {
       case 'appointments': return <Appointments />;
       case 'clients': return <Clients />;
       case 'services': return <Services />;
-      case 'finances': return <Finances />;
       case 'anamnesis': return <AnamnesisList />;
+      case 'loyalty': return <LoyaltyHub />; // 👈 NOVA ROTA ADICIONADA
+      case 'finances': return <Finances />;
       default: return <Dashboard />;
     }
   };
 
+  // 👇 NOVO ITEM "FIDELIDADE" ADICIONADO AO MENU 👇
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={24} /> },
     { id: 'appointments', label: 'Agenda', icon: <CalendarIcon size={24} /> },
     { id: 'clients', label: 'Clientes', icon: <Users size={24} /> },
     { id: 'services', label: 'Serviços', icon: <Scissors size={24} /> },
     { id: 'anamnesis', label: 'Fichas Clínicas', icon: <ClipboardList size={24} /> },
+    { id: 'loyalty', label: 'Fidelidade', icon: <Crown size={24} /> }, 
     { id: 'finances', label: 'Financeiro', icon: <DollarSign size={24} /> },
   ];
 
@@ -73,16 +77,16 @@ export default function App() {
     <ThemeProvider theme={mariTheme}>
       <CssBaseline /> 
       
-      {/* 👇 ESTILOS GLOBAIS PARA COMPORTAMENTO DE APP NATIVO NO TABLET 👇 */}
+      {/* ESTILOS GLOBAIS PARA COMPORTAMENTO DE APP NATIVO NO TABLET */}
       <GlobalStyles styles={{
         'html, body': {
-          overscrollBehaviorY: 'none', // Evita o "puxar para atualizar"
+          overscrollBehaviorY: 'none', 
           WebkitTouchCallout: 'none',
-          WebkitUserSelect: 'none',    // Evita seleção de texto acidental com toques rápidos
+          WebkitUserSelect: 'none',    
           userSelect: 'none',
         },
         'input, textarea': {
-          WebkitUserSelect: 'auto',    // Garante que os inputs continuem funcionando normalmente
+          WebkitUserSelect: 'auto',    
           userSelect: 'auto',
         }
       }} />
@@ -175,7 +179,7 @@ export default function App() {
             </Tooltip>
 
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: '500', textAlign: 'center' }}>
-              {isSidebarOpen ? 'Feito com carinho ❤️ v2' : '❤️ v2'}
+              {isSidebarOpen ? 'Feito com carinho ❤️ v2.1' : '❤️ v2.1'}
             </Typography>
 
           </Box>
