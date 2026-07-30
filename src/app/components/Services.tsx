@@ -37,12 +37,16 @@ export function Services() {
       category: formData.category
     };
 
-    if (editingId) {
-      await updateService(editingId, data);
-    } else {
-      await addService({ id: Date.now().toString(), ...data });
+    try {
+      if (editingId) {
+        await updateService(editingId, data);
+      } else {
+        await addService({ id: crypto.randomUUID(), ...data });
+      }
+      setOpen(false);
+    } catch (error) {
+      console.error('Erro ao salvar serviço:', error);
     }
-    setOpen(false);
   };
 
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -77,7 +81,7 @@ export function Services() {
                     <Chip label={s.category} size="small" color="primary" sx={{ fontWeight: 'bold', opacity: 0.8 }} />
                     <Box>
                       <IconButton size="small" color="primary" onClick={() => handleOpen(s)}><Edit size={18} /></IconButton>
-                      <IconButton size="small" color="error" onClick={() => { if(confirm('Excluir este serviço definitivamente?')) deleteService(s.id); }}><Trash2 size={18} /></IconButton>
+                      <IconButton size="small" color="error" onClick={() => { if(confirm('Excluir este serviço definitivamente?')) deleteService(s.id).catch((error) => console.error('Erro ao excluir serviço:', error)); }}><Trash2 size={18} /></IconButton>
                     </Box>
                   </Box>
                   <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>{s.name}</Typography>

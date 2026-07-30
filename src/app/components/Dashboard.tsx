@@ -104,7 +104,7 @@ export function Dashboard() {
         if (valorNumerico > 0) {
           const client = clients.find(c => c.id === app.clientId);
           await addFinance({
-            id: Date.now().toString(),
+            id: crypto.randomUUID(),
             type: 'receita',
             description: `Atendimento: ${app.service} (${client?.name || 'Cliente'})`,
             value: valorNumerico,
@@ -162,7 +162,7 @@ export function Dashboard() {
         if (formData.status === 'concluido' && originalApp?.status !== 'concluido' && valorNumerico > 0) {
           const client = clients.find(c => c.id === formData.clientId);
           await addFinance({
-            id: Date.now().toString(),
+            id: crypto.randomUUID(),
             type: 'receita',
             description: `Atendimento: ${servicosUnidos} (${client?.name || 'Cliente'})`,
             value: valorNumerico,
@@ -190,7 +190,8 @@ export function Dashboard() {
   const handlePrepareReschedule = () => {
     if (!editingId) return;
     
-    updateAppointment(editingId, { ...formData, service: formData.services.join(', '), status: 'reagendado' } as any);
+    updateAppointment(editingId, { ...formData, service: formData.services.join(', '), status: 'reagendado' } as any)
+      .catch((error) => console.error('Erro ao reagendar:', error));
     const oldDateStr = formData.date ? format(parseISO(formData.date), 'dd/MM/yyyy') : 'data anterior';
     const autoNote = `[Origem: Reagendado do dia ${oldDateStr} às ${formData.time}]`;
     setEditingId(null);
@@ -438,7 +439,7 @@ export function Dashboard() {
         </DialogContent>
         <DialogActions sx={{ p: 2, flexWrap: 'wrap', gap: 1, justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <IconButton color="error" onClick={() => { if (confirm('Excluir agendamento?')) { deleteAppointment(editingId as string); setEditModalOpen(false); } }}><Trash2 size={20} /></IconButton>
+            <IconButton color="error" onClick={() => { if (confirm('Excluir agendamento?')) { deleteAppointment(editingId as string).catch((error) => console.error('Erro ao excluir agendamento:', error)); setEditModalOpen(false); } }}><Trash2 size={20} /></IconButton>
             <Button color="warning" variant="outlined" onClick={handlePrepareReschedule} startIcon={<CalendarClock size={18} />}>Reagendar</Button>
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>

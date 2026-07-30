@@ -14,9 +14,9 @@ import {
   VisitResult,
 } from '../types/loyalty';
 
-// Reutiliza a mesma conexão Supabase do projeto
-const SUPABASE_URL = 'https://usqitmgfqtvdxszeusyf.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_u9RgR3SAeVLdQTjb7FerLQ_492VkzC1';
+// Reutiliza a mesma conexão Supabase do projeto (definida em .env — ver .env.example)
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ─── PROGRAMA ATIVO: JORNADA PREMIUM ────────────────────────
@@ -146,7 +146,7 @@ export const useLoyalty = create<LoyaltyState>((set, get) => ({
       const { error } = await supabase
         .from('client_loyalty_progress')
         .insert([newProgress]);
-      if (error) console.error('❌ Erro ao criar progresso:', error.message);
+      if (error) { console.error('❌ Erro ao criar progresso:', error.message); alert('Erro ao registrar visita: ' + error.message); }
       await fetchLoyaltyData();
       return { isReward: false, wasReset: false, newCount: 1 };
     }
@@ -165,7 +165,7 @@ export const useLoyalty = create<LoyaltyState>((set, get) => ({
           last_visit_date: new Date().toISOString(),
         })
         .eq('id', existing.id);
-      if (error) console.error('❌ Erro ao resetar ciclo:', error.message);
+      if (error) { console.error('❌ Erro ao resetar ciclo:', error.message); alert('Erro ao registrar visita: ' + error.message); }
       await fetchLoyaltyData();
       return { isReward: true, wasReset, newCount: 0 };
     }
@@ -182,7 +182,7 @@ export const useLoyalty = create<LoyaltyState>((set, get) => ({
         last_visit_date: new Date().toISOString(),
       })
       .eq('id', existing.id);
-    if (error) console.error('❌ Erro ao atualizar progresso:', error.message);
+    if (error) { console.error('❌ Erro ao atualizar progresso:', error.message); alert('Erro ao registrar visita: ' + error.message); }
     await fetchLoyaltyData();
     return { isReward: false, wasReset, newCount };
   },
@@ -195,7 +195,7 @@ export const useLoyalty = create<LoyaltyState>((set, get) => ({
       created_at: new Date().toISOString(),
     };
     const { error } = await supabase.from('nps_feedbacks').insert([newFeedback]);
-    if (error) console.error('❌ Erro ao salvar NPS:', error.message);
+    if (error) { console.error('❌ Erro ao salvar NPS:', error.message); alert('Erro ao salvar avaliação NPS: ' + error.message); }
     await get().fetchLoyaltyData();
   },
 }));

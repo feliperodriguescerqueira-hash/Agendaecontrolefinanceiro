@@ -79,18 +79,22 @@ export function Finances() {
     });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.description || !formData.value) return;
-    
-    addFinance({
-      id: Date.now().toString(),
-      type: formData.type as 'receita' | 'despesa',
-      description: formData.description,
-      value: Number(formData.value),
-      date: formData.date,
-      category: formData.category
-    });
-    handleCloseModal();
+
+    try {
+      await addFinance({
+        id: crypto.randomUUID(),
+        type: formData.type as 'receita' | 'despesa',
+        description: formData.description,
+        value: Number(formData.value),
+        date: formData.date,
+        category: formData.category
+      });
+      handleCloseModal();
+    } catch (error) {
+      console.error('Erro ao salvar transação:', error);
+    }
   };
 
   const monthlyFinances = useMemo(() => {
@@ -283,7 +287,7 @@ export function Finances() {
                           <Typography variant="body2" sx={{ fontWeight: 'bold', color: t.type === 'receita' ? 'success.main' : 'error.main' }}>
                             {t.type === 'receita' ? '+' : '-'} {formatPrice(t.value)}
                           </Typography>
-                          <IconButton edge="end" size="small" color="error" onClick={() => { if(confirm('Excluir transação?')) deleteFinance(t.id); }}>
+                          <IconButton edge="end" size="small" color="error" onClick={() => { if(confirm('Excluir transação?')) deleteFinance(t.id).catch((error) => console.error('Erro ao excluir transação:', error)); }}>
                             <Trash2 size={18} />
                           </IconButton>
                         </Box>

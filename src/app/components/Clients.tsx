@@ -60,8 +60,12 @@ export function Clients() {
 
   const handleDeleteSelected = async () => {
     if (confirm(`⚠️ Tem certeza que deseja excluir ${selectedIds.length} clientes? Essa ação não pode ser desfeita.`)) {
-      await deleteMultipleClients(selectedIds);
-      setSelectedIds([]);
+      try {
+        await deleteMultipleClients(selectedIds);
+        setSelectedIds([]);
+      } catch (error) {
+        console.error('Erro ao excluir clientes selecionados:', error);
+      }
     }
   };
 
@@ -76,13 +80,17 @@ export function Clients() {
     setOpen(true);
   };
 
-  const handleSave = () => {
-    if (editingId) {
-      updateClient(editingId, formData);
-    } else {
-      addClient({ id: Date.now().toString(), ...formData });
+  const handleSave = async () => {
+    try {
+      if (editingId) {
+        await updateClient(editingId, formData);
+      } else {
+        await addClient({ id: crypto.randomUUID(), ...formData });
+      }
+      setOpen(false);
+    } catch (error) {
+      console.error('Erro ao salvar cliente:', error);
     }
-    setOpen(false);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,7 +105,11 @@ export function Clients() {
         if (!line) continue;
         const [name, phone, email] = line.split(',');
         if (name) {
-          await addClient({ id: Date.now().toString() + i, name, phone: phone || '', email: email || '' });
+          try {
+            await addClient({ id: crypto.randomUUID(), name, phone: phone || '', email: email || '' });
+          } catch (error) {
+            console.error(`Erro ao importar linha ${i + 1} do CSV:`, error);
+          }
         }
       }
       alert('Importação concluída!');
@@ -235,7 +247,7 @@ export function Clients() {
                       <IconButton size="small" color="primary" onClick={() => handleOpen(client)}><Edit size={18} /></IconButton>
                     </Tooltip>
                     <Tooltip title="Excluir">
-                      <IconButton size="small" color="error" onClick={() => { if(confirm('Excluir cliente?')) deleteClient(client.id); }}><Trash2 size={18} /></IconButton>
+                      <IconButton size="small" color="error" onClick={() => { if(confirm('Excluir cliente?')) deleteClient(client.id).catch((error) => console.error('Erro ao excluir cliente:', error)); }}><Trash2 size={18} /></IconButton>
                     </Tooltip>
                   </Box>
                 </Box>

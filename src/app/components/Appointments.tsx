@@ -112,7 +112,7 @@ export function Appointments() {
         
         if (formData.status === 'concluido' && originalApp?.status !== 'concluido' && valorNumerico > 0) {
           await addFinance({
-            id: Date.now().toString(),
+            id: crypto.randomUUID(),
             type: 'receita',
             description: `Atendimento: ${servicosUnidos} (${client?.name || 'Cliente'})`,
             value: valorNumerico,
@@ -120,13 +120,13 @@ export function Appointments() {
             category: 'Serviços'
           });
         }
-      } 
-      else { 
-        await addAppointment({ id: Date.now().toString(), ...appPayload }); 
-        
+      }
+      else {
+        await addAppointment({ id: crypto.randomUUID(), ...appPayload });
+
         if (formData.status === 'concluido' && valorNumerico > 0) {
           await addFinance({
-            id: Date.now().toString(),
+            id: crypto.randomUUID(),
             type: 'receita',
             description: `Atendimento: ${servicosUnidos} (${client?.name || 'Cliente'})`,
             value: valorNumerico,
@@ -155,7 +155,7 @@ export function Appointments() {
       notes: formData.notes
     };
     
-    updateAppointment(editingId, appPayload);
+    updateAppointment(editingId, appPayload).catch((error) => console.error('Erro ao reagendar:', error));
     const oldDateStr = formData.date ? format(parseISO(formData.date), 'dd/MM/yyyy') : 'data anterior';
     const autoNote = `[Origem: Reagendado do dia ${oldDateStr} às ${formData.time}]`;
     setEditingId(null);
@@ -305,7 +305,7 @@ export function Appointments() {
         <DialogActions sx={{ p: 2, flexWrap: 'wrap', gap: 1, justifyContent: 'space-between' }}>
           {editingId ? (
             <Box sx={{ display: 'flex', gap: 1 }}>
-              <IconButton color="error" onClick={() => { if(confirm('Excluir?')) { deleteAppointment(editingId); handleClose(); } }}><Trash2 size={20} /></IconButton>
+              <IconButton color="error" onClick={() => { if(confirm('Excluir?')) { deleteAppointment(editingId).catch((error) => console.error('Erro ao excluir agendamento:', error)); handleClose(); } }}><Trash2 size={20} /></IconButton>
               <Button color="warning" variant="outlined" onClick={handlePrepareReschedule} startIcon={<CalendarClock size={18}/>}>Reagendar</Button>
             </Box>
           ) : <Box />}

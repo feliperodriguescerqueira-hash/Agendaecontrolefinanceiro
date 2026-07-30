@@ -29,8 +29,8 @@ import { LoyaltyProgram, ClientLoyaltyProgress } from '../types/loyalty';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
-  'https://usqitmgfqtvdxszeusyf.supabase.co',
-  'sb_publishable_u9RgR3SAeVLdQTjb7FerLQ_492VkzC1'
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_KEY
 );
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -147,7 +147,7 @@ export function LoyaltyHub() {
     }
     setSaving(true);
     const newProgram = {
-      id: `prog-${Date.now()}`,
+      id: `prog-${crypto.randomUUID()}`,
       name: form.name,
       type: form.type,
       is_active: false, // inativo por padrão até ativar
@@ -172,10 +172,11 @@ export function LoyaltyHub() {
 
   // ── Toggle ativo/inativo de um programa ──────────────────
   const handleToggleProgram = async (prog: LoyaltyProgram) => {
-    await supabase
+    const { error } = await supabase
       .from('loyalty_programs')
       .update({ is_active: !prog.is_active })
       .eq('id', prog.id);
+    if (error) alert('Erro ao atualizar programa: ' + error.message);
     await fetchPrograms();
   };
 
